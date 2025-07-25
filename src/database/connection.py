@@ -17,6 +17,9 @@ import os
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from src.database.models import Base
+from dotenv import load_dotenv
+
+load_dotenv()  # Load environment variables from .env file
 
 # Database URL from environment
 # Match structures.py approach - require env vars without defaults
@@ -29,6 +32,7 @@ DATABASE_URL = os.getenv(
     f"{os.environ['POSTGRES_DB']}",
 )
 
+print(f"Using database URL: {DATABASE_URL}")  # Debugging line to check the URL
 # Create async engine
 engine = create_async_engine(
     DATABASE_URL,

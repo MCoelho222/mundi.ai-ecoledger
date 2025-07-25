@@ -288,6 +288,11 @@ async def get_project(
     ),
 ):
     user_id = session.get_user_id()
+    # Convert string UUID to UUID type for PostgreSQL
+    import uuid
+
+    user_uuid = uuid.UUID(user_id)
+
     async with get_async_db_connection() as conn:
         project_data = await conn.fetchrow(
             """
@@ -295,15 +300,15 @@ async def get_project(
             FROM user_mundiai_projects p
             WHERE (
                 p.owner_uuid = $1 OR
-                $2 = ANY(p.editor_uuids) OR
-                $3 = ANY(p.viewer_uuids)
+                (p.editor_uuids IS NOT NULL AND $2 = ANY(p.editor_uuids)) OR
+                (p.viewer_uuids IS NOT NULL AND $3 = ANY(p.viewer_uuids))
             ) AND p.soft_deleted_at IS NULL
             AND p.id = $4
             ORDER BY p.created_on DESC
             """,
-            user_id,
-            user_id,
-            user_id,
+            user_uuid,
+            user_uuid,
+            user_uuid,
             project_id,
         )
 

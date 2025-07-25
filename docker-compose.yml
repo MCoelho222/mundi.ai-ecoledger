@@ -99,9 +99,10 @@ services:
       - ./data/postgres:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U mundiuser -d mundidb"]
-      interval: 1s
+      interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 30s
 
   driftdb:
     platform: linux/amd64
@@ -112,9 +113,11 @@ services:
       x-bake:
         tags:
           - driftdb-local
+    ports:
+      - 8080:8080
     environment:
-      # - USE_HTTPS_WSS=1
-      - HOSTNAME_OVERRIDE=localhost:5173
+      - USE_HTTPS_WSS=1
+      - HOSTNAME_OVERRIDE=localhost:8080
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "cat /proc/net/tcp | grep '1F90'"]

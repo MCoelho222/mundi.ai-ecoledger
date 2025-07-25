@@ -25,13 +25,47 @@ from sqlalchemy import (
     BIGINT,
     Float,
     ForeignKey,
+    Date,
 )
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
+from geoalchemy2 import Geometry
+
 Base = declarative_base()
+
+
+class CariraFeature(Base):
+    __tablename__ = "carira_features"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    owner_uuid = Column(UUID, nullable=False)
+    property_code = Column(String)
+    municipality = Column(String)
+    area_id = Column(String)
+    area_name = Column(String)
+    app_area = Column(Float)  # Permanent Preservation Area (if "APP" means that)
+    total_area = Column(Float)
+    biomass_area = Column(Float)
+    carbon_area = Column(Float)
+    soil_carbon = Column(Float)
+    tree_carbon = Column(Float)
+    herbaceous_carbon = Column(Float)
+    litter_carbon = Column(Float)
+    total_carbon = Column(Float)
+    annual_carbon_capture = Column(Float)
+    co2_emission = Column(Float)
+    monitoring_date = Column(Date)  # Changed from String to Date
+    vegetation_type = Column(String)
+    land_use = Column(String)
+    reforestation_age = Column(Integer)
+    estimation_method = Column(String)
+    data_source = Column(String)
+    estimation_error = Column(Float)
+    responsible = Column(String)
+    geometry = Column(Geometry("POLYGON"))
 
 
 class UserMundiaiProject(Base):
