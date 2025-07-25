@@ -22,9 +22,14 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, FileResponse
+from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi_proxy_lib.fastapi.app import reverse_http_app, reverse_ws_app
 import httpx
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 from src.routes import (
     postgres_routes,
@@ -55,6 +60,15 @@ app = FastAPI(
     # Don't show OpenAPI spec, docs, redoc
     openapi_url=None,
     lifespan=lifespan,
+)
+
+# Add CORS middleware to allow frontend access from localhost:5173
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -107,13 +121,13 @@ app.include_router(
 
 
 # Create a combined proxy router for DriftDB that handles both HTTP and WebSocket
-# Use a WebSocket-capable proxy for the /room routes
-room_ws_app = reverse_ws_app(base_url="ws://driftdb:8080/room/")
+# Use a WebSocket-capable proxy for the /room routes (localhost since app runs on host)
+room_ws_app = reverse_ws_app(base_url="ws://localhost:8080/room/")
 # Mount it as a sub-application
 app.mount("/room/", room_ws_app)
 
-# Use HTTP proxy for other DriftDB paths
-drift_app = reverse_http_app(base_url="http://driftdb:8080/")
+# Use HTTP proxy for other DriftDB paths (localhost since app runs on host)
+drift_app = reverse_http_app(base_url="http://localhost:8080/")
 # Mount it as a sub-application
 app.mount("/drift/", drift_app)
 
@@ -138,7 +152,8 @@ app.mount("/drift/", drift_app)
 
 
 # First mount specific static assets to ensure they're properly served
-app.mount("/assets", StaticFiles(directory="frontendts/dist/assets"), name="spa-assets")
+# Temporarily commented out until frontend assets are built
+# app.mount("/assets", StaticFiles(directory="frontendts/dist/assets"), name="spa-assets")
 
 
 @app.post("/supertokens/session/refresh")
@@ -178,6 +193,53 @@ async def mock_session_refresh(request: Request):
         return response
 
 
+@app.post("/supertokens/signin")
+async def mock_signin(request: Request):
+    if os.environ.get("MUNDI_AUTH_MODE") == "edit":
+        # Create fake signin response
+        expiry = int(time.time() * 1000) + 3600 * 1000  # 1 hour
+        front_token = base64.b64encode(
+            json.dumps({"uid": "demo", "ate": expiry, "up": {}}).encode()
+        ).decode()
+
+        id_refresh = str(uuid.uuid4())
+        anti_csrf = str(uuid.uuid4())
+        access_tok = f"dummyAccess.{uuid.uuid4()}"
+        refresh_tok = f"dummyRefresh.{uuid.uuid4()}"
+
+        response = JSONResponse(
+            status_code=200,
+            content={
+                "status": "OK",
+                "user": {"id": "demo", "email": "demo@example.com"},
+            },
+        )
+
+        # Headers
+        response.headers["front-token"] = front_token
+        response.headers["id-refresh-token"] = id_refresh
+        response.headers["anti-csrf"] = anti_csrf
+        response.headers["access-control-expose-headers"] = (
+            "front-token, id-refresh-token, anti-csrf"
+        )
+        response.headers["access-control-allow-credentials"] = "true"
+
+        # Cookies
+        cookie_opts = dict(path="/", httponly=True, samesite="lax")
+        response.set_cookie("sAccessToken", access_tok, **cookie_opts)
+        response.set_cookie("sRefreshToken", refresh_tok, **cookie_opts)
+        response.set_cookie("sIdRefreshToken", id_refresh, **cookie_opts)
+
+        return response
+
+
+@app.post("/supertokens/signup")
+async def mock_signup(request: Request):
+    if os.environ.get("MUNDI_AUTH_MODE") == "edit":
+        # Create fake signup response - same as signin for mock
+        return await mock_signin(request)
+
+
 @app.exception_handler(StarletteHTTPException)
 async def spa_server(request: Request, exc: StarletteHTTPException):
     # Don't handle API 404s - let them bubble up as real 404s
@@ -192,4 +254,9 @@ async def spa_server(request: Request, exc: StarletteHTTPException):
         )
 
     # For all other routes, return the SPA's index.html
-    return FileResponse("frontendts/dist/index.html")
+    # Temporarily commented out until frontend is built
+    # return FileResponse("frontendts/dist/index.html")
+    return JSONResponse(
+        status_code=404,
+        content={"detail": "Frontend not available in development mode"},
+    )

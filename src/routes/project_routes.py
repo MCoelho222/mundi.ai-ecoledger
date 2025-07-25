@@ -28,6 +28,7 @@ from fastapi.responses import Response, HTMLResponse
 from pydantic import BaseModel
 from ..dependencies.session import (
     verify_session_required,
+    verify_session_optional,
     UserContext,
 )
 from ..dependencies.base_map import BaseMapProvider, get_base_map_provider
@@ -113,7 +114,7 @@ class UserProjectsResponse(BaseModel):
     "/", response_model=UserProjectsResponse, operation_id="list_user_projects"
 )
 async def list_user_projects(
-    session: UserContext = Depends(verify_session_required),
+    session: Optional[UserContext] = Depends(verify_session_optional),
     connection_manager: PostgresConnectionManager = Depends(
         get_postgres_connection_manager
     ),
@@ -123,53 +124,89 @@ async def list_user_projects(
 ):
     """
     List all projects associated with the authenticated user.
+    In view_only mode, returns only publicly accessible projects.
     A project is associated if the user is the owner, an editor, or a viewer.
     """
-    user_id = session.get_user_id()
+    import os
+
+    auth_mode = os.environ.get("MUNDI_AUTH_MODE")
+
+    if auth_mode == "view_only" or session is None:
+        # In view_only mode or when not authenticated, only show link_accessible projects
+        user_id = None
+    else:
+        user_id = session.get_user_id()
 
     # Calculate offset for pagination
     offset = (page - 1) * limit
 
     async with get_async_db_connection() as conn:
-        # Get total count for pagination
-        total_items = await conn.fetchval(
-            """
-            SELECT COUNT(*)
-            FROM user_mundiai_projects p
-            WHERE (
-                p.owner_uuid = $1 OR
-                $2 = ANY(p.editor_uuids) OR
-                $3 = ANY(p.viewer_uuids)
-            ) AND ($4 OR p.soft_deleted_at IS NULL)
-            """,
-            user_id,
-            user_id,
-            user_id,
-            include_deleted,
-        )
+        if user_id is None:
+            # View-only mode: only show publicly accessible projects
+            total_items = await conn.fetchval(
+                """
+                SELECT COUNT(*)
+                FROM user_mundiai_projects p
+                WHERE p.link_accessible = true AND ($1 OR p.soft_deleted_at IS NULL)
+                """,
+                include_deleted,
+            )
 
-        # Calculate total pages
-        total_pages = (total_items + limit - 1) // limit
+            # Calculate total pages
+            total_pages = (total_items + limit - 1) // limit
 
-        projects_data = await conn.fetch(
-            """
-            SELECT p.id, p.owner_uuid, p.link_accessible, p.maps, p.created_on, p.soft_deleted_at
-            FROM user_mundiai_projects p
-            WHERE (
-                p.owner_uuid = $1 OR
-                $2 = ANY(p.editor_uuids) OR
-                $3 = ANY(p.viewer_uuids)
-            ) AND ($4 OR p.soft_deleted_at IS NULL)
-            ORDER BY p.created_on DESC
-            LIMIT $5 OFFSET $6
-            """,
-            user_id,
-            user_id,
-            user_id,
-            include_deleted,
-            limit,
-            offset,
-        )
+            projects_data = await conn.fetch(
+                """
+                SELECT p.id, p.owner_uuid, p.link_accessible, p.maps, p.created_on, p.soft_deleted_at
+                FROM user_mundiai_projects p
+                WHERE p.link_accessible = true AND ($1 OR p.soft_deleted_at IS NULL)
+                ORDER BY p.created_on DESC
+                LIMIT $2 OFFSET $3
+                """,
+                include_deleted,
+                limit,
+                offset,
+            )
+        else:
+            # Authenticated mode: show user's projects
+            total_items = await conn.fetchval(
+                """
+                SELECT COUNT(*)
+                FROM user_mundiai_projects p
+                WHERE (
+                    p.owner_uuid = $1 OR
+                    $2 = ANY(p.editor_uuids) OR
+                    $3 = ANY(p.viewer_uuids)
+                ) AND ($4 OR p.soft_deleted_at IS NULL)
+                """,
+                user_id,
+                user_id,
+                user_id,
+                include_deleted,
+            )
+
+            # Calculate total pages
+            total_pages = (total_items + limit - 1) // limit
+
+            projects_data = await conn.fetch(
+                """
+                SELECT p.id, p.owner_uuid, p.link_accessible, p.maps, p.created_on, p.soft_deleted_at
+                FROM user_mundiai_projects p
+                WHERE (
+                    p.owner_uuid = $1 OR
+                    $2 = ANY(p.editor_uuids) OR
+                    $3 = ANY(p.viewer_uuids)
+                ) AND ($4 OR p.soft_deleted_at IS NULL)
+                ORDER BY p.created_on DESC
+                LIMIT $5 OFFSET $6
+                """,
+                user_id,
+                user_id,
+                user_id,
+                include_deleted,
+                limit,
+                offset,
+            )
 
         projects_response = []
         for project_data in projects_data:
