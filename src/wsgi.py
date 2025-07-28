@@ -41,7 +41,7 @@ from src.routes import (
 
 from src.routes.postgres_routes import basemap_router
 from src.routes.layer_router import layer_router
-from src.routes.carira_routes import carira_router
+from src.routes.carira_routes import carira_router, carira_public_router
 # from fastapi_mcp import FastApiMCP
 
 
@@ -64,14 +64,15 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Add CORS middleware to allow frontend access from localhost:5173
+# Add CORS middleware to allow frontend access from localhost:5173 and null origin for local file access
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["http://localhost:5173", "http://localhost:3000", "null"],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
+
 
 @app.exception_handler(httpx.RemoteProtocolError)
 async def handle_driftdb_error(request: Request, exc: httpx.RemoteProtocolError):
@@ -118,6 +119,11 @@ app.include_router(
     carira_router,
     prefix="/api/carira",
     tags=["Carira Features"],
+)
+app.include_router(
+    carira_public_router,
+    prefix="/public",
+    tags=["Public API"],
 )
 app.include_router(
     basemap_router,
@@ -204,6 +210,7 @@ async def spa_server(request: Request, exc: StarletteHTTPException):
     # Don't handle API 404s - let them bubble up as real 404s
     if (
         request.url.path.startswith("/api/")
+        or request.url.path.startswith("/public/")
         or request.url.path.startswith("/supertokens/")
         or request.url.path.startswith("/mcp")
     ):

@@ -90,22 +90,22 @@ services:
       echo 'S3 user setup complete!';
       "
 
-  postgresdb:
-    image: postgis/postgis:16-3.5
-    environment:
-      - POSTGRES_DB=mundidb
-      - POSTGRES_USER=mundiuser
-      - POSTGRES_PASSWORD=gdalpassword
-    ports:
-      - 5432:5432
-    volumes:
-      - ./data/postgres:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U mundiuser -d mundidb"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
+  # postgresdb:
+  #   image: postgis/postgis:16-3.5
+  #   environment:
+  #     - POSTGRES_DB=mundidb
+  #     - POSTGRES_USER=mundiuser
+  #     - POSTGRES_PASSWORD=gdalpassword
+  #   ports:
+  #     - 5432:5432
+  #   volumes:
+  #     - ./data/postgres:/var/lib/postgresql/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U mundiuser -d mundidb"]
+  #     interval: 5s
+  #     timeout: 5s
+  #     retries: 5
+  #     start_period: 30s
 
   driftdb:
     platform: linux/amd64
@@ -148,6 +148,8 @@ services:
       x-bake:
         tags:
           - qgis-processing:local
+    ports:
+      - "8817:8817"
     command: python -m uvicorn server:app --host 0.0.0.0 --port 8817
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8817/health"]
