@@ -34,42 +34,51 @@ OpenAI API
 #### **Public Routes** (`src/routes/carira_routes.py`)
 
 **List Carbon Features**
+
 ```python
 @carira_public_router.get("/public/carira/features")
 async def list_carira_features_public()
 ```
+
 - Returns paginated list of carbon monitoring features
 - Includes geometry, carbon data, and metadata
 - No authentication required
 
 **Get Feature Details**
+
 ```python
 @carira_public_router.get("/public/carira/feature/{feature_id}")
 async def get_carira_feature_public(feature_id: int)
 ```
+
 - Returns detailed feature data with geometry
 - Calculates centroid and bounding box for map centering
 - PostGIS integration for geospatial operations
 
 **Create Public Map**
+
 ```python
 @carira_public_router.post("/public/carira/create-map-for-feature/{feature_id}")
 async def create_public_map_for_feature(feature_id: int)
 ```
+
 - Creates/reuses map instance for feature visualization
 - Returns embed URL for iframe integration
 - Uses system user for public map ownership
 
 **AI Chat Integration**
+
 ```python
 @carira_public_router.post("/public/carira/feature/{feature_id}/chat")
 async def chat_with_carira_feature(feature_id: int, request: dict)
 ```
+
 - Context-aware AI responses about carbon data
 - OpenAI GPT-4o-mini integration
 - Feature-specific carbon analysis
 
 #### **CORS Configuration** (`src/wsgi.py`)
+
 ```python
 app.add_middleware(
     CORSMiddleware,
@@ -83,27 +92,34 @@ app.add_middleware(
 ### 2. Frontend Components
 
 #### **Public Route Handler** (`frontendts/src/App.tsx`)
+
 ```tsx
 // Conditional SuperTokens initialization
-function initializeSuperTokens() { /* ... */ }
+function initializeSuperTokens() {
+  /* ... */
+}
 
 // Public route for iframe embedding
-<Route path="/carira/feature/:projectId" element={<CariraFeatureMap />} />
+<Route path="/carira/feature/:projectId" element={<CariraFeatureMap />} />;
 ```
 
 #### **Feature Map Component** (`frontendts/src/components/CariraFeatureMap.tsx`)
+
 ```tsx
 // Public API integration
-const apiUrl = window.location.hostname === "localhost"
-  ? `http://localhost:8000/public/carira/feature/${id}`
-  : `/public/carira/feature/${id}`;
+const apiUrl =
+  window.location.hostname === "localhost"
+    ? `http://localhost:8000/public/carira/feature/${id}`
+    : `/public/carira/feature/${id}`;
 
 // Embed mode optimization
 const isEmbedMode = searchParams.get("embed") === "true";
 ```
 
 #### **Enhanced Map Component** (`frontendts/src/components/MapLibreMap.tsx`)
+
 Key improvements:
+
 - **Safe Authentication Wrappers**: Graceful degradation when auth unavailable
 - **Optimized Zoom Levels**: `maxZoom: 18` with higher initial zoom
 - **Green Geometry Highlighting**: Clear carbon feature visualization
@@ -113,6 +129,7 @@ Key improvements:
 ### 3. AI Intelligence System
 
 #### **Model Configuration** (`src/dependencies/chat_completions.py`)
+
 ```python
 class DefaultChatArgsProvider(ChatArgsProvider):
     async def get_args(self, user_id: str, resource_type: str) -> dict:
@@ -124,6 +141,7 @@ class DefaultChatArgsProvider(ChatArgsProvider):
 ```
 
 #### **OpenAI Client Setup** (`src/utils.py`)
+
 ```python
 def get_openai_client() -> AsyncOpenAI:
     base_url = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
@@ -133,7 +151,9 @@ def get_openai_client() -> AsyncOpenAI:
 ### 4. External Integration
 
 #### **Demo Implementation** (`external-frontend-demo.html`)
+
 Complete external website example showing:
+
 - Feature listing from public API
 - Map creation and iframe embedding
 - Interactive carbon monitoring dashboard
@@ -196,47 +216,49 @@ MUNDI_AUTH_MODE=edit
 ```html
 <!DOCTYPE html>
 <html>
-<head>
+  <head>
     <title>Carbon Monitoring Dashboard</title>
-</head>
-<body>
+  </head>
+  <body>
     <div id="features-list"></div>
     <div id="map-view" style="display: none;">
-        <iframe id="map-iframe" width="100%" height="600px"></iframe>
+      <iframe id="map-iframe" width="100%" height="600px"></iframe>
     </div>
 
     <script>
-        const API_BASE = "http://localhost:8000/public";
-        const FRONTEND_BASE = "http://localhost:5173";
+      const API_BASE = "http://localhost:8000/public";
+      const FRONTEND_BASE = "http://localhost:5173";
 
-        // Load features
-        async function loadFeatures() {
-            const response = await fetch(`${API_BASE}/carira/features`);
-            const data = await response.json();
-            // Display features...
-        }
+      // Load features
+      async function loadFeatures() {
+        const response = await fetch(`${API_BASE}/carira/features`);
+        const data = await response.json();
+        // Display features...
+      }
 
-        // Create and display map
-        async function viewFeatureOnMap(featureId) {
-            const response = await fetch(
-                `${API_BASE}/carira/create-map-for-feature/${featureId}`,
-                { method: "POST" }
-            );
-            const mapData = await response.json();
-            
-            if (mapData.success) {
-                document.getElementById("map-iframe").src = 
-                    `${FRONTEND_BASE}${mapData.embed_url}`;
-            }
+      // Create and display map
+      async function viewFeatureOnMap(featureId) {
+        const response = await fetch(
+          `${API_BASE}/carira/create-map-for-feature/${featureId}`,
+          { method: "POST" }
+        );
+        const mapData = await response.json();
+
+        if (mapData.success) {
+          document.getElementById(
+            "map-iframe"
+          ).src = `${FRONTEND_BASE}${mapData.embed_url}`;
         }
+      }
     </script>
-</body>
+  </body>
 </html>
 ```
 
 ### API Response Examples
 
 **Features List Response:**
+
 ```json
 {
   "features": [
@@ -255,18 +277,20 @@ MUNDI_AUTH_MODE=edit
 ```
 
 **Map Creation Response:**
+
 ```json
 {
   "success": true,
   "message": "Public map created successfully",
   "project_id": "proj_abc123",
-  "map_id": "map_def456", 
+  "map_id": "map_def456",
   "feature_id": 1,
   "embed_url": "/carira/feature/proj_abc123?feature=1&embed=true"
 }
 ```
 
 **AI Chat Response:**
+
 ```json
 {
   "response": "Based on the carbon monitoring data for Carbon Reserve Area 1 in São Paulo, this 150.75 hectare area currently stores approximately 2,543.67 tons of CO₂ equivalent. This represents a healthy carbon sequestration rate of about 16.87 tons CO₂/hectare, which is above average for this region..."
@@ -276,15 +300,17 @@ MUNDI_AUTH_MODE=edit
 ## 🛠️ Development Setup
 
 1. **Backend Services**
+
    ```bash
    # Start PostgreSQL with PostGIS
    docker-compose up postgres
-   
+
    # Start FastAPI server
    python -m uvicorn src.wsgi:app --reload --port 8000
    ```
 
 2. **Frontend Development**
+
    ```bash
    cd frontendts
    npm install
