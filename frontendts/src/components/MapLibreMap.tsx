@@ -1564,8 +1564,8 @@ export default function MapLibreMap({
         const featureId = cariraFeatureData.features[0].properties.id;
         const chatUrl =
           window.location.hostname === "localhost"
-            ? `http://localhost:8000/public/carira/feature/${featureId}/chat`
-            : `/public/carira/feature/${featureId}/chat`;
+            ? `http://localhost:8000/public/feature/${featureId}/chat`
+            : `/public/feature/${featureId}/chat`;
 
         response = await fetch(chatUrl, {
           method: "POST",

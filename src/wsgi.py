@@ -41,7 +41,7 @@ from src.routes import (
 
 from src.routes.postgres_routes import basemap_router
 from src.routes.layer_router import layer_router
-from src.routes.carira_routes import carira_router, carira_public_router
+from src.routes.feature_routes import iframe_router, iframe_public_router
 # from fastapi_mcp import FastApiMCP
 
 
@@ -116,12 +116,12 @@ app.include_router(
     tags=["Projects"],
 )
 app.include_router(
-    carira_router,
-    prefix="/api/carira",
+    iframe_router,
+    prefix="/api/iframe",
     tags=["Carira Features"],
 )
 app.include_router(
-    carira_public_router,
+    iframe_public_router,
     prefix="/public",
     tags=["Public API"],
 )

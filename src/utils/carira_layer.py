@@ -30,7 +30,7 @@ def generate_layer_id() -> str:
     return f"L{random_part}"
 
 
-async def create_carira_postgis_connection(owner_uuid: str) -> str:
+async def create_feature_postgis_connection(owner_uuid: str) -> str:
     print(f"Creating PostGIS connection for owner {owner_uuid}")
     """
     Create a PostGIS connection that points to the internal database
@@ -75,7 +75,7 @@ async def create_carira_postgis_connection(owner_uuid: str) -> str:
         raise
 
 
-async def create_carira_layer(owner_uuid: str, postgis_connection_id: str) -> str:
+async def create_feature_layer(owner_uuid: str, postgis_connection_id: str) -> str:
     """
     Create a CariraFeatures layer that shows all CariraFeatures on the map.
 
@@ -218,8 +218,8 @@ async def ensure_carira_layer_exists(owner_uuid: str) -> Optional[str]:
                 return None
 
             # Create PostGIS connection and layer
-            postgis_connection_id = await create_carira_postgis_connection(owner_uuid)
-            layer_id = await create_carira_layer(owner_uuid, postgis_connection_id)
+            postgis_connection_id = await create_feature_postgis_connection(owner_uuid)
+            layer_id = await create_feature_layer(owner_uuid, postgis_connection_id)
 
             logger.info(
                 f"Created new CariraFeatures layer {layer_id} for user {owner_uuid}"

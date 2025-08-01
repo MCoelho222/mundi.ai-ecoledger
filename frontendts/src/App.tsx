@@ -19,7 +19,7 @@ import { Toaster } from "@/components/ui/sonner";
 
 import MapsList from "./components/MapsList";
 import ProjectView from "./components/ProjectView";
-import CariraFeatureMap from "./components/CariraFeatureMap";
+import FeatureMap from "./components/FeatureMap";
 import PostGISDocumentation from "./pages/PostGISDocumentation";
 import "./App.css";
 
@@ -31,18 +31,18 @@ if (!websiteDomain) {
 }
 
 // Move SuperTokens initialization inside a function so it only runs when needed
-function initializeSuperTokens() {
-  const emailVerificationMode = import.meta.env.VITE_EMAIL_VERIFICATION;
-  if (
-    emailVerificationMode !== "require" &&
-    emailVerificationMode !== "disable"
-  ) {
-    throw new Error(
-      "VITE_EMAIL_VERIFICATION must be either 'require' or 'disable'"
-    );
-  }
-  const emailVerificationEnabled = emailVerificationMode === "require";
+const emailVerificationMode = import.meta.env.VITE_EMAIL_VERIFICATION;
+if (
+  emailVerificationMode !== "require" &&
+  emailVerificationMode !== "disable"
+) {
+  throw new Error(
+    "VITE_EMAIL_VERIFICATION must be either 'require' or 'disable'"
+  );
+}
+const emailVerificationEnabled = emailVerificationMode === "require";
 
+function initializeSuperTokens() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recipeList: any[] = [EmailPassword.init(), Session.init()];
   if (emailVerificationEnabled) {
@@ -144,10 +144,7 @@ function AppContent() {
               </SessionAuth>
             }
           />
-          <Route
-            path="/carira/feature/:projectId"
-            element={<CariraFeatureMap />}
-          />
+          <Route path="/feature/:projectId" element={<FeatureMap />} />
           <Route
             path="/postgis/:connectionId"
             element={
@@ -164,8 +161,7 @@ function AppContent() {
 
 function App() {
   // Check if this is a public route that should bypass authentication
-  const isPublicCariraRoute =
-    window.location.pathname.startsWith("/carira/feature/");
+  const isPublicCariraRoute = window.location.pathname.startsWith("/feature/");
 
   if (isPublicCariraRoute) {
     // For public Carira routes, render completely independently without any SuperTokens initialization
@@ -173,10 +169,7 @@ function App() {
       <div>
         <BrowserRouter>
           <Routes>
-            <Route
-              path="/carira/feature/:projectId"
-              element={<CariraFeatureMap />}
-            />
+            <Route path="/feature/:projectId" element={<FeatureMap />} />
           </Routes>
         </BrowserRouter>
         <Toaster />

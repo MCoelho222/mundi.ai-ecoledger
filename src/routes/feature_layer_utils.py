@@ -13,12 +13,16 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import os
 import logging
 import secrets
 import string
 import json
 from typing import Optional
 from ..structures import get_async_db_connection
+from dotenv import load_dotenv
+
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -31,10 +35,10 @@ def generate_layer_id() -> str:
     return f"L{random_part}"
 
 
-async def create_carira_postgis_connection(owner_uuid: str) -> str:
+async def create_feature_postgis_connection(owner_uuid: str) -> str:
     """
     Create a PostGIS connection that points to the internal database
-    for accessing CariraFeatures.
+    for accessing Features.
 
     Returns the connection ID.
     """
@@ -68,16 +72,17 @@ async def create_carira_postgis_connection(owner_uuid: str) -> str:
                     """,
                     project_id,
                     owner_uuid,
-                    "Internal CariraFeatures Project",
-                    "Auto-generated project for CariraFeatures layer",
+                    "Internal Project",
+                    "Auto-generated project for Features layer",
                 )
             else:
                 project_id = existing_project
 
             # Create the PostGIS connection with connection URI
-            connection_uri = (
-                "postgresql://mundiuser:gdalpassword@postgresdb:5432/mundidb"
-            )
+            # connection_uri = (
+            #     "postgresql://mundiuser:gdalpassword@postgresdb:5432/mundidb"
+            # )
+            connection_uri = os.environ.get("POSTGRES_URL")
 
             await conn.execute(
                 """
@@ -91,22 +96,22 @@ async def create_carira_postgis_connection(owner_uuid: str) -> str:
                 project_id,
                 owner_uuid,
                 connection_uri,
-                "Internal CariraFeatures",
+                "Internal Features",
             )
 
             logger.info(
-                f"Created internal PostGIS connection {connection_id} for CariraFeatures"
+                f"Created internal PostGIS connection {connection_id} for Ecoledger Features"
             )
             return connection_id
 
     except Exception as e:
-        logger.error(f"Error creating CariraFeatures PostGIS connection: {str(e)}")
+        logger.error(f"Error creating Ecoledger Features PostGIS connection: {str(e)}")
         raise
 
 
-async def create_carira_layer(owner_uuid: str, postgis_connection_id: str) -> str:
+async def create_feature_layer(owner_uuid: str, postgis_connection_id: str) -> str:
     """
-    Create a CariraFeatures layer that shows all CariraFeatures on the map.
+    Create a Features layer that shows all Features on the map.
 
     Returns the layer ID.
     """
@@ -114,35 +119,25 @@ async def create_carira_layer(owner_uuid: str, postgis_connection_id: str) -> st
         async with get_async_db_connection() as conn:
             layer_id = generate_layer_id()
 
-            # SQL query to get CariraFeatures as GeoJSON
+            # SQL query to get Features as GeoJSON
             postgis_query = """
             SELECT 
                 id,
-                property_code,
-                municipality,
-                area_id,
-                area_name,
-                app_area,
-                total_area,
-                biomass_area,
-                carbon_area,
-                soil_carbon,
-                tree_carbon,
-                herbaceous_carbon,
-                litter_carbon,
-                total_carbon,
-                annual_carbon_capture,
-                co2_emission,
-                monitoring_date,
-                vegetation_type,
-                land_use,
-                reforestation_age,
-                estimation_method,
-                data_source,
-                estimation_error,
-                responsible,
-                geometry
-            FROM carira_features
+                user_id,
+                name,
+                description,
+                status,
+                start_date,
+                end_date,
+                area_hectares,
+                carbon_credits_generated,
+                location,
+                project_type,
+                certification_status,
+                created_at,
+                updated_at
+
+            FROM projects
             WHERE owner_uuid = $1
             """
 
@@ -186,15 +181,15 @@ async def create_carira_layer(owner_uuid: str, postgis_connection_id: str) -> st
                 """,
                 layer_id,
                 owner_uuid,
-                "Carira Carbon Features",
+                "Carbon Features",
                 "",  # path (not used for PostGIS layers)
                 "postgis",
                 postgis_connection_id,
                 postgis_query,
                 json.dumps(
                     {
-                        "description": "Carbon monitoring features from Carira municipality",
-                        "source": "CariraFeatures table",
+                        "description": "Carbon monitoring features",
+                        "source": "Features table",
                         "auto_generated": True,
                     }
                 ),
@@ -205,25 +200,25 @@ async def create_carira_layer(owner_uuid: str, postgis_connection_id: str) -> st
             )
 
             logger.info(
-                f"Created CariraFeatures layer {layer_id} with {feature_count} features"
+                f"Created Features layer {layer_id} with {feature_count} features"
             )
             return layer_id
 
     except Exception as e:
-        logger.error(f"Error creating CariraFeatures layer: {str(e)}")
+        logger.error(f"Error creating Features layer: {str(e)}")
         raise
 
 
 async def ensure_carira_layer_exists(owner_uuid: str) -> Optional[str]:
     """
-    Ensure that a CariraFeatures layer exists for the given user.
+    Ensure that a Features layer exists for the given user.
     If it doesn't exist, create it.
 
     Returns the layer ID or None if creation failed.
     """
     try:
         async with get_async_db_connection() as conn:
-            # Check if CariraFeatures layer already exists
+            # Check if Features layer already exists
             existing_layer = await conn.fetchval(
                 """
                 SELECT layer_id FROM map_layers 
@@ -235,34 +230,32 @@ async def ensure_carira_layer_exists(owner_uuid: str) -> Optional[str]:
             )
 
             if existing_layer:
-                logger.info(f"CariraFeatures layer {existing_layer} already exists")
+                logger.info(f"Features layer {existing_layer} already exists")
                 return existing_layer
 
-            # Check if we have any CariraFeatures to display
+            # Check if we have any Features to display
             feature_count = await conn.fetchval(
                 "SELECT COUNT(*) FROM carira_features WHERE owner_uuid = $1", owner_uuid
             )
 
-            logger.info(f"Found {feature_count} CariraFeatures for user {owner_uuid}")
+            logger.info(f"Found {feature_count} Features for user {owner_uuid}")
 
             if feature_count == 0:
-                logger.info("No CariraFeatures found, skipping layer creation")
+                logger.info("No Features found, skipping layer creation")
                 return None
 
             # Create PostGIS connection and layer
             logger.info("Creating PostGIS connection...")
-            postgis_connection_id = await create_carira_postgis_connection(owner_uuid)
+            postgis_connection_id = await create_feature_postgis_connection(owner_uuid)
             logger.info(f"PostGIS connection created: {postgis_connection_id}")
 
             logger.info("Creating Carira layer...")
-            layer_id = await create_carira_layer(owner_uuid, postgis_connection_id)
+            layer_id = await create_feature_layer(owner_uuid, postgis_connection_id)
             logger.info(f"Carira layer created: {layer_id}")
 
-            logger.info(
-                f"Created new CariraFeatures layer {layer_id} for user {owner_uuid}"
-            )
+            logger.info(f"Created new Features layer {layer_id} for user {owner_uuid}")
             return layer_id
 
     except Exception as e:
-        logger.error(f"Error ensuring CariraFeatures layer exists: {str(e)}")
+        logger.error(f"Error ensuring Features layer exists: {str(e)}")
         return None

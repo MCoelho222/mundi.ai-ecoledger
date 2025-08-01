@@ -112,7 +112,7 @@
       // Load and display features
       async function loadFeatures() {
         try {
-          const response = await fetch(`${API_BASE}/carira/features`);
+          const response = await fetch(`${API_BASE}/features`);
           const data = await response.json();
 
           const featuresContainer = document.getElementById("features-list");
@@ -182,7 +182,7 @@
         try {
           // Create a map for this feature
           const response = await fetch(
-            `${API_BASE}/carira/create-map-for-feature/${featureId}`,
+            `${API_BASE}/create-map-for-feature/${featureId}`,
             {
               method: "POST",
             }

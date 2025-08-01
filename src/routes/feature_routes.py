@@ -27,12 +27,12 @@ from ..dependencies.session import verify_session_required, UserContext
 from ..dependencies.chat_completions import get_chat_args_provider, ChatArgsProvider
 from ..structures import get_async_db_connection
 from ..utils import get_openai_client
-from .carira_layer_utils import ensure_carira_layer_exists
+from .feature_layer_utils import ensure_carira_layer_exists
 
 logger = logging.getLogger(__name__)
 
-carira_router = APIRouter()
-carira_public_router = APIRouter()
+iframe_router = APIRouter()
+iframe_public_router = APIRouter()
 
 
 async def generate_intelligent_response(
@@ -296,33 +296,11 @@ class CariraFeatureCreate(BaseModel):
     geometry: Optional[dict] = None  # GeoJSON geometry object
 
 
-class CariraFeatureResponse(BaseModel):
+class FeatureResponse(BaseModel):
     id: int
-    owner_uuid: UUID
-    property_code: Optional[str] = None
-    municipality: Optional[str] = None
-    area_id: Optional[str] = None
-    area_name: Optional[str] = None
-    app_area: Optional[float] = None
-    total_area: Optional[float] = None
-    biomass_area: Optional[float] = None
-    carbon_area: Optional[float] = None
-    soil_carbon: Optional[float] = None
-    tree_carbon: Optional[float] = None
-    herbaceous_carbon: Optional[float] = None
-    litter_carbon: Optional[float] = None
-    total_carbon: Optional[float] = None
-    annual_carbon_capture: Optional[float] = None
-    co2_emission: Optional[float] = None
-    monitoring_date: Optional[date] = None
-    vegetation_type: Optional[str] = None
-    land_use: Optional[str] = None
-    reforestation_age: Optional[int] = None
-    estimation_method: Optional[str] = None
-    data_source: Optional[str] = None
-    estimation_error: Optional[float] = None
-    responsible: Optional[str] = None
+    project_id: Optional[str] = None
     geometry: Optional[dict] = None  # GeoJSON geometry object
+    properties: Optional[dict] = None  # Feature properties
 
 
 class CariraFeatureCreateResponse(BaseModel):
@@ -332,7 +310,7 @@ class CariraFeatureCreateResponse(BaseModel):
 
 
 class CariraFeaturesListResponse(BaseModel):
-    features: List[CariraFeatureResponse]
+    features: List[FeatureResponse]
     total_count: int
 
 
@@ -343,50 +321,69 @@ class BulkImportResponse(BaseModel):
     errors: List[str] = []
 
 
-class CariraFeaturePublicResponse(BaseModel):
+class FeaturePublicResponse(BaseModel):
     """Public response model for external frontend - limited fields"""
 
     id: int
-    area_id: Optional[str] = None
-    area_name: Optional[str] = None
-    municipality: Optional[str] = None
-    total_area: Optional[float] = None
-    total_carbon: Optional[float] = None
-    monitoring_date: Optional[date] = None
+    user_id: Optional[str] = None
+    name: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[str] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    area_hectares: Optional[float] = None
+    carbon_credits_generated: Optional[float] = None
+    location: Optional[str] = None
+    project_type: Optional[str] = None
+    certification_status: Optional[str] = None
+    created_at: Optional[date] = None
+    updated_at: Optional[date] = None
 
 
-class CariraFeaturesPublicListResponse(BaseModel):
-    features: List[CariraFeaturePublicResponse]
+class FeaturesPublicListResponse(BaseModel):
+    features: List[FeaturePublicResponse]
     total_count: int
 
 
 # PUBLIC ENDPOINTS FOR EXTERNAL FRONTEND
-@carira_public_router.get(
-    "/carira/features",
-    response_model=CariraFeaturesPublicListResponse,
-    operation_id="list_carira_features_public",
+@iframe_public_router.get(
+    "/features",
+    response_model=FeaturesPublicListResponse,
+    operation_id="list_features_public",
 )
-async def list_carira_features_public(
+async def list_features_public(
     limit: int = 50,
     offset: int = 0,
 ):
     """
-    Public endpoint to list Carira features for external frontend.
+    Public endpoint to list features for external frontend.
     Returns limited information without requiring authentication.
     """
     try:
         async with get_async_db_connection() as conn:
             # Get total count
-            total_count = await conn.fetchval("SELECT COUNT(*) FROM carira_features")
+            total_count = await conn.fetchval("SELECT COUNT(*) FROM projects")
 
             # Get features with limited fields
             features_data = await conn.fetch(
                 """
                 SELECT 
-                    id, area_id, area_name, municipality,
-                    total_area, total_carbon, monitoring_date
-                FROM carira_features 
-                ORDER BY monitoring_date DESC, id DESC
+                    id,
+                    user_id,
+                    name,
+                    description,
+                    status,
+                    start_date,
+                    end_date,
+                    area_hectares,
+                    carbon_credits_generated,
+                    location,
+                    project_type,
+                    certification_status,
+                    created_at,
+                    updated_at
+                FROM projects 
+                ORDER BY start_date DESC, id DESC
                 LIMIT $1 OFFSET $2
                 """,
                 limit,
@@ -394,30 +391,29 @@ async def list_carira_features_public(
             )
 
             features = [
-                CariraFeaturePublicResponse(**dict(feature))
-                for feature in features_data
+                FeaturePublicResponse(**dict(feature)) for feature in features_data
             ]
 
-            return CariraFeaturesPublicListResponse(
+            return FeaturesPublicListResponse(
                 features=features, total_count=total_count
             )
 
     except Exception as e:
-        logger.error(f"Error listing public Carira features: {str(e)}")
+        logger.error(f"Error listing public Features: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to list Carira features",
+            detail="Failed to list Features",
         )
 
 
-@carira_public_router.get(
-    "/carira/feature/{feature_id}",
-    response_model=CariraFeatureResponse,
-    operation_id="get_carira_feature_public",
+@iframe_public_router.get(
+    "/feature/{feature_id}",
+    response_model=FeatureResponse,
+    operation_id="get_feature_public",
 )
-async def get_carira_feature_public(feature_id: int):
+async def get_feature_public(feature_id: int):
     """
-    Public endpoint to get a specific Carira feature by ID for map display.
+    Public endpoint to get a specific Feature by ID for map display.
     Returns full feature data including geometry for map visualization.
     """
     try:
@@ -425,15 +421,9 @@ async def get_carira_feature_public(feature_id: int):
             feature_data = await conn.fetchrow(
                 """
                 SELECT 
-                    id, owner_uuid, property_code, municipality, area_id, area_name,
-                    app_area, total_area, biomass_area, carbon_area, soil_carbon,
-                    tree_carbon, herbaceous_carbon, litter_carbon, total_carbon,
-                    annual_carbon_capture, co2_emission, monitoring_date,
-                    vegetation_type, land_use, reforestation_age, estimation_method,
-                    data_source, estimation_error, responsible,
-                    ST_AsGeoJSON(geometry)::jsonb as geometry
-                FROM carira_features 
-                WHERE id = $1
+                    id, project_id, properties, geometry
+                FROM project_areas 
+                WHERE project_id = $1
                 """,
                 feature_id,
             )
@@ -441,7 +431,7 @@ async def get_carira_feature_public(feature_id: int):
             if not feature_data:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Carira feature {feature_id} not found",
+                    detail=f"Feature {feature_id} not found",
                 )
 
             feature_dict = dict(feature_data)
@@ -452,25 +442,25 @@ async def get_carira_feature_public(feature_id: int):
                 except (json.JSONDecodeError, TypeError):
                     feature_dict["geometry"] = None
 
-            return CariraFeatureResponse(**feature_dict)
+            return FeatureResponse(**feature_dict)
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting public Carira feature {feature_id}: {str(e)}")
+        logger.error(f"Error getting public Feature {feature_id}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to get Carira feature",
+            detail="Failed to get Feature",
         )
 
 
-@carira_public_router.post(
-    "/carira/create-map-for-feature/{feature_id}",
+@iframe_public_router.post(
+    "/create-map-for-feature/{feature_id}",
     operation_id="create_public_map_for_feature",
 )
 async def create_public_map_for_feature(feature_id: int):
     """
-    Create a public map that displays a specific Carira feature.
+    Create a public map that displays a specific Feature.
     This endpoint creates a temporary map that can be embedded in iframes.
     """
     try:
@@ -478,9 +468,9 @@ async def create_public_map_for_feature(feature_id: int):
             # Check if feature exists
             feature_data = await conn.fetchrow(
                 """
-                SELECT id, area_name, municipality, owner_uuid
-                FROM carira_features 
-                WHERE id = $1
+                SELECT id, project_id, geometry, properties
+                FROM project_areas 
+                WHERE project_id = $1
                 """,
                 feature_id,
             )
@@ -488,7 +478,7 @@ async def create_public_map_for_feature(feature_id: int):
             if not feature_data:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Carira feature {feature_id} not found",
+                    detail=f"Ecoledger project {feature_id} not found",
                 )
 
             # Use a default system user UUID for public maps
@@ -506,7 +496,7 @@ async def create_public_map_for_feature(feature_id: int):
                 LIMIT 1
                 """,
                 system_user_id,
-                f"%Feature {feature_id}%",
+                f"%Project - {feature_id}%",
             )
 
             if existing_map:
@@ -516,8 +506,8 @@ async def create_public_map_for_feature(feature_id: int):
                     "project_id": existing_map["project_id"],
                     "map_id": existing_map["id"],
                     "feature_id": feature_id,
-                    "map_url": f"/carira/feature/{existing_map['project_id']}?feature={feature_id}",
-                    "embed_url": f"/carira/feature/{existing_map['project_id']}?feature={feature_id}&embed=true",
+                    "map_url": f"/feature/{existing_map['project_id']}?feature={feature_id}",
+                    "embed_url": f"/feature/{existing_map['project_id']}?feature={feature_id}&embed=true",
                 }
 
             # Create a public project
@@ -541,8 +531,8 @@ async def create_public_map_for_feature(feature_id: int):
                 secrets.choice(string.ascii_letters + string.digits) for _ in range(11)
             )
 
-            map_title = f"Carira Feature {feature_id} - {feature_data['area_name'] or 'Unknown Area'}"
-            map_description = f"Map showing carbon monitoring feature in {feature_data['municipality']}"
+            map_title = f"Project - {feature_id}"
+            map_description = "Map showing carbon monitoring feature"
 
             await conn.execute(
                 """
@@ -574,8 +564,8 @@ async def create_public_map_for_feature(feature_id: int):
                 "project_id": project_id,
                 "map_id": map_id,
                 "feature_id": feature_id,
-                "map_url": f"/carira/feature/{project_id}?feature={feature_id}",
-                "embed_url": f"/carira/feature/{project_id}?feature={feature_id}&embed=true",
+                "map_url": f"/feature/{project_id}?feature={feature_id}",
+                "embed_url": f"/feature/{project_id}?feature={feature_id}&embed=true",
             }
 
     except HTTPException:
@@ -588,8 +578,8 @@ async def create_public_map_for_feature(feature_id: int):
         )
 
 
-@carira_public_router.post(
-    "/carira/feature/{feature_id}/chat", operation_id="chat_with_carira_feature"
+@iframe_public_router.post(
+    "/feature/{feature_id}/chat", operation_id="chat_with_carira_feature"
 )
 async def chat_with_carira_feature(
     feature_id: int,
@@ -682,10 +672,7 @@ async def chat_with_carira_feature(
 # AUTHENTICATED ENDPOINTS
 
 
-# AUTHENTICATED ENDPOINTS
-
-
-@carira_router.post(
+@iframe_router.post(
     "/",
     response_model=CariraFeatureCreateResponse,
     operation_id="create_carira_feature",
@@ -807,7 +794,7 @@ async def create_carira_feature(
         )
 
 
-@carira_router.get(
+@iframe_router.get(
     "/", response_model=CariraFeaturesListResponse, operation_id="list_carira_features"
 )
 async def list_carira_features(
@@ -861,7 +848,7 @@ async def list_carira_features(
                         feature_dict["geometry"] = json.loads(feature_dict["geometry"])
                     except (json.JSONDecodeError, TypeError):
                         feature_dict["geometry"] = None
-                features.append(CariraFeatureResponse(**feature_dict))
+                features.append(FeatureResponse(**feature_dict))
 
             return CariraFeaturesListResponse(
                 features=features, total_count=total_count
@@ -875,9 +862,9 @@ async def list_carira_features(
         )
 
 
-@carira_router.get(
+@iframe_router.get(
     "/{feature_id}",
-    response_model=CariraFeatureResponse,
+    response_model=FeatureResponse,
     operation_id="get_carira_feature",
 )
 async def get_carira_feature(
@@ -922,19 +909,19 @@ async def get_carira_feature(
                 except (json.JSONDecodeError, TypeError):
                     feature_dict["geometry"] = None
 
-            return CariraFeatureResponse(**feature_dict)
+            return FeatureResponse(**feature_dict)
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting Carira feature {feature_id}: {str(e)}")
+        logger.error(f"Error getting Feature {feature_id}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to get Carira feature",
+            detail="Failed to get Feature",
         )
 
 
-@carira_router.delete("/{feature_id}", operation_id="delete_carira_feature")
+@iframe_router.delete("/{feature_id}", operation_id="delete_carira_feature")
 async def delete_carira_feature(
     feature_id: int,
     session: UserContext = Depends(verify_session_required),
@@ -986,7 +973,7 @@ async def delete_carira_feature(
         )
 
 
-@carira_router.post(
+@iframe_router.post(
     "/bulk-import",
     response_model=BulkImportResponse,
     operation_id="bulk_import_carira_features",
@@ -1245,7 +1232,7 @@ async def bulk_import_carira_features(
         )
 
 
-@carira_router.post("/create-map-layer", operation_id="create_carira_map_layer")
+@iframe_router.post("/create-map-layer", operation_id="create_carira_map_layer")
 async def create_carira_map_layer(
     session: UserContext = Depends(verify_session_required),
 ):
@@ -1294,7 +1281,7 @@ async def create_carira_map_layer(
         )
 
 
-@carira_router.post("/create-default-map")
+@iframe_router.post("/create-default-map")
 async def create_default_carira_map(
     session: UserContext = Depends(verify_session_required),
 ):

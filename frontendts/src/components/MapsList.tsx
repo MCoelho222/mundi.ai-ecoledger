@@ -165,7 +165,7 @@ export default function MapsList({ hideNewButton = false }: MapsListProps) {
   const handleCreateMap = async () => {
     setCreating(true);
     try {
-      const response = await fetch("/api/carira/create-default-map", {
+      const response = await fetch("/api/create-default-map", {
         method: "POST",
       });
 
@@ -352,12 +352,9 @@ export default function MapsList({ hideNewButton = false }: MapsListProps) {
                 onClick={async () => {
                   try {
                     setCreating(true);
-                    const response = await fetch(
-                      "/api/carira/create-default-map",
-                      {
-                        method: "POST",
-                      }
-                    );
+                    const response = await fetch("/api/create-default-map", {
+                      method: "POST",
+                    });
 
                     if (!response.ok) {
                       throw new Error("Failed to create Carira map");

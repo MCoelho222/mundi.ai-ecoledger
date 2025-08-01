@@ -44,7 +44,7 @@ interface CariraMapData {
   }>;
 }
 
-export default function CariraFeatureMap() {
+export default function FeatureMap() {
   const { projectId } = useParams();
   const [searchParams] = useSearchParams();
   const featureId = searchParams.get("feature");
@@ -64,8 +64,8 @@ export default function CariraFeatureMap() {
       // Use public API endpoint to avoid authentication issues in iframe embeds
       const apiUrl =
         window.location.hostname === "localhost"
-          ? `http://localhost:8000/public/carira/feature/${id}`
-          : `/public/carira/feature/${id}`;
+          ? `http://localhost:8000/public/feature/${id}`
+          : `/public/feature/${id}`;
 
       const response = await fetch(apiUrl);
       if (!response.ok) {
@@ -168,7 +168,7 @@ export default function CariraFeatureMap() {
   return (
     <div className={`${isEmbedMode ? "h-screen" : "h-full"} flex flex-col`}>
       {/* Feature Info Header (hidden in embed mode) */}
-      {!isEmbedMode && feature && (
+      {/* {!isEmbedMode && feature && (
         <div className="bg-white border-b border-gray-200 p-4">
           <div className="flex justify-between items-start">
             <div>
@@ -192,7 +192,7 @@ export default function CariraFeatureMap() {
             </div>
           </div>
         </div>
-      )}
+      )} */}
 
       {/* Map Container */}
       <div className="flex-1 relative">

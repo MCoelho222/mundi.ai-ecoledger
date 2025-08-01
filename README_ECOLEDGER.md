@@ -31,13 +31,13 @@ OpenAI API
 
 ### 1. Backend API Infrastructure
 
-#### **Public Routes** (`src/routes/carira_routes.py`)
+#### **Public Routes** (`src/routes_routes.py`)
 
 **List Carbon Features**
 
 ```python
-@carira_public_router.get("/public/carira/features")
-async def list_carira_features_public()
+@iframe_public_router.get("/public/features")
+async def list_features_public()
 ```
 
 - Returns paginated list of carbon monitoring features
@@ -47,8 +47,8 @@ async def list_carira_features_public()
 **Get Feature Details**
 
 ```python
-@carira_public_router.get("/public/carira/feature/{feature_id}")
-async def get_carira_feature_public(feature_id: int)
+@iframe_public_router.get("/public/feature/{feature_id}")
+async def get_feature_public(feature_id: int)
 ```
 
 - Returns detailed feature data with geometry
@@ -58,7 +58,7 @@ async def get_carira_feature_public(feature_id: int)
 **Create Public Map**
 
 ```python
-@carira_public_router.post("/public/carira/create-map-for-feature/{feature_id}")
+@iframe_public_router.post("/public/create-map-for-feature/{feature_id}")
 async def create_public_map_for_feature(feature_id: int)
 ```
 
@@ -69,7 +69,7 @@ async def create_public_map_for_feature(feature_id: int)
 **AI Chat Integration**
 
 ```python
-@carira_public_router.post("/public/carira/feature/{feature_id}/chat")
+@iframe_public_router.post("/public/feature/{feature_id}/chat")
 async def chat_with_carira_feature(feature_id: int, request: dict)
 ```
 
@@ -100,17 +100,17 @@ function initializeSuperTokens() {
 }
 
 // Public route for iframe embedding
-<Route path="/carira/feature/:projectId" element={<CariraFeatureMap />} />;
+<Route path="/feature/:projectId" element={<FeatureMap />} />;
 ```
 
-#### **Feature Map Component** (`frontendts/src/components/CariraFeatureMap.tsx`)
+#### **Feature Map Component** (`frontendts/src/componentsFeatureMap.tsx`)
 
 ```tsx
 // Public API integration
 const apiUrl =
   window.location.hostname === "localhost"
-    ? `http://localhost:8000/public/carira/feature/${id}`
-    : `/public/carira/feature/${id}`;
+    ? `http://localhost:8000/public/feature/${id}`
+    : `/public/feature/${id}`;
 
 // Embed mode optimization
 const isEmbedMode = searchParams.get("embed") === "true";
@@ -168,23 +168,23 @@ sequenceDiagram
     participant IFRAME as React Iframe
     participant OPENAI as OpenAI API
 
-    EXT->>API: GET /public/carira/features
+    EXT->>API: GET /public/features
     API->>DB: Query carbon features
     DB-->>API: Feature list
     API-->>EXT: JSON response
 
-    EXT->>API: POST /public/carira/create-map-for-feature/1
+    EXT->>API: POST /public/create-map-for-feature/1
     API->>DB: Create/find map
     DB-->>API: Map details
     API-->>EXT: Embed URL
 
     EXT->>IFRAME: Load iframe with embed URL
-    IFRAME->>API: GET /public/carira/feature/1
+    IFRAME->>API: GET /public/feature/1
     API->>DB: Feature geometry & data
     DB-->>API: Detailed feature
     API-->>IFRAME: Feature with geometry
 
-    IFRAME->>API: POST /public/carira/feature/1/chat
+    IFRAME->>API: POST /public/feature/1/chat
     API->>OPENAI: Context-aware prompt
     OPENAI-->>API: AI response
     API-->>IFRAME: Intelligent carbon analysis
@@ -231,7 +231,7 @@ MUNDI_AUTH_MODE=edit
 
       // Load features
       async function loadFeatures() {
-        const response = await fetch(`${API_BASE}/carira/features`);
+        const response = await fetch(`${API_BASE}/features`);
         const data = await response.json();
         // Display features...
       }
@@ -239,7 +239,7 @@ MUNDI_AUTH_MODE=edit
       // Create and display map
       async function viewFeatureOnMap(featureId) {
         const response = await fetch(
-          `${API_BASE}/carira/create-map-for-feature/${featureId}`,
+          `${API_BASE}/create-map-for-feature/${featureId}`,
           { method: "POST" }
         );
         const mapData = await response.json();
@@ -285,7 +285,7 @@ MUNDI_AUTH_MODE=edit
   "project_id": "proj_abc123",
   "map_id": "map_def456",
   "feature_id": 1,
-  "embed_url": "/carira/feature/proj_abc123?feature=1&embed=true"
+  "embed_url": "/feature/proj_abc123?feature=1&embed=true"
 }
 ```
 
