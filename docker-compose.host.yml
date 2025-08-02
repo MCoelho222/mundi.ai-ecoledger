@@ -1,0 +1,84 @@
+# Copyright Bunting Labs, Inc. 2025
+# Supporting services for hybrid deployment (backend runs on host)
+
+services:
+  minio:
+    image: bitnami/minio:latest
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=admin
+      - MINIO_ROOT_PASSWORD=password
+      - MINIO_DEFAULT_BUCKETS=test-bucket
+    volumes:
+      - ./data/minio:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 1s
+      timeout: 2s
+      retries: 10
+
+  mc:
+    image: minio/mc
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc alias set myminio http://minio:9000 admin password;
+      /usr/bin/mc admin user add myminio s3user backup123;
+      /usr/bin/mc admin policy attach myminio readwrite --user s3user ||
+      (sleep 3 && /usr/bin/mc admin policy attach myminio readwrite --user s3user);
+      echo 'S3 user setup complete!';
+      "
+
+  driftdb:
+    platform: linux/amd64
+    image: ${DRIFTDB_IMAGE:-driftdb-local}
+    build:
+      context: ./driftdb
+      dockerfile: driftdb-server/Dockerfile
+      x-bake:
+        tags:
+          - driftdb-local
+    environment:
+      # - USE_HTTPS_WSS=1
+      - HOSTNAME_OVERRIDE=localhost:5173
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "cat /proc/net/tcp | grep '1F90'"]
+      interval: 1s
+      timeout: 2s
+      retries: 5
+      start_period: 3s
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 1s
+      timeout: 2s
+      retries: 5
+
+  qgis-processing:
+    platform: linux/amd64
+    image: ${QGIS_PROCESSING_IMAGE:-qgis-processing:local}
+    build:
+      context: ./qgis-processing
+      dockerfile: Dockerfile
+      x-bake:
+        tags:
+          - qgis-processing:local
+    command: python -m uvicorn server:app --host 0.0.0.0 --port 8817
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8817/health"]
+      interval: 30s
+      timeout: 30s
+      retries: 3
+      start_period: 10s

@@ -22,9 +22,14 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, FileResponse
+from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi_proxy_lib.fastapi.app import reverse_http_app, reverse_ws_app
 import httpx
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 from src.routes import (
     postgres_routes,
@@ -33,8 +38,10 @@ from src.routes import (
     message_routes,
     websocket,
 )
+
 from src.routes.postgres_routes import basemap_router
 from src.routes.layer_router import layer_router
+from src.routes.feature_routes import iframe_router, iframe_public_router
 # from fastapi_mcp import FastApiMCP
 
 
@@ -55,6 +62,15 @@ app = FastAPI(
     # Don't show OpenAPI spec, docs, redoc
     openapi_url=None,
     lifespan=lifespan,
+)
+
+# Add CORS middleware to allow frontend access from localhost:5173 and null origin for local file access
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://localhost:3000", "null"],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
 )
 
 
@@ -100,6 +116,16 @@ app.include_router(
     tags=["Projects"],
 )
 app.include_router(
+    iframe_router,
+    prefix="/api/iframe",
+    tags=["Carira Features"],
+)
+app.include_router(
+    iframe_public_router,
+    prefix="/public",
+    tags=["Public API"],
+)
+app.include_router(
     basemap_router,
     prefix="/api/basemaps",
     tags=["Basemaps"],
@@ -138,7 +164,8 @@ app.mount("/drift/", drift_app)
 
 
 # First mount specific static assets to ensure they're properly served
-app.mount("/assets", StaticFiles(directory="frontendts/dist/assets"), name="spa-assets")
+# Temporarily commented out until frontend assets are built
+# app.mount("/assets", StaticFiles(directory="frontendts/dist/assets"), name="spa-assets")
 
 
 @app.post("/supertokens/session/refresh")
@@ -183,6 +210,7 @@ async def spa_server(request: Request, exc: StarletteHTTPException):
     # Don't handle API 404s - let them bubble up as real 404s
     if (
         request.url.path.startswith("/api/")
+        or request.url.path.startswith("/public/")
         or request.url.path.startswith("/supertokens/")
         or request.url.path.startswith("/mcp")
     ):
@@ -192,4 +220,9 @@ async def spa_server(request: Request, exc: StarletteHTTPException):
         )
 
     # For all other routes, return the SPA's index.html
-    return FileResponse("frontendts/dist/index.html")
+    # Temporarily commented out until frontend is built
+    # return FileResponse("frontendts/dist/index.html")
+    return JSONResponse(
+        status_code=404,
+        content={"detail": "Frontend not available in development mode"},
+    )

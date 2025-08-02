@@ -18,6 +18,7 @@ import uuid
 import math
 import secrets
 import json
+
 from fastapi import (
     APIRouter,
     HTTPException,
@@ -38,7 +39,8 @@ import logging
 import difflib
 from datetime import datetime
 from pyproj import Transformer
-from osgeo import osr
+
+# from osgeo import osr  # Temporarily commented out until GDAL is available
 from fastapi import File, UploadFile, Form
 from redis import Redis
 import tempfile
@@ -46,13 +48,16 @@ from starlette.responses import (
     JSONResponse as StarletteJSONResponse,
 )
 import asyncio
+# import shutil
+# import fiona
 
 from src.utils import (
     get_bucket_name,
     process_zip_with_shapefile,
     get_async_s3_client,
 )
-from osgeo import gdal
+
+# from osgeo import gdal  # Temporarily commented out until GDAL is available
 import subprocess
 from src.symbology.llm import generate_maplibre_layers_for_layer_id
 from src.routes.layer_router import describe_layer_internal
@@ -1379,66 +1384,76 @@ async def internal_upload_layer(
             feature_count = None
             if layer_type == "raster":
                 # Use GDAL to get bounds for raster files
-                ds = gdal.Open(temp_file_path)
-                if ds:
-                    gt = ds.GetGeoTransform()
-                    width = ds.RasterXSize
-                    height = ds.RasterYSize
+                # Temporarily commented out until GDAL is available
+                # ds = gdal.Open(temp_file_path)
+                # if ds:
+                #     gt = ds.GetGeoTransform()
+                #     width = ds.RasterXSize
+                #     height = ds.RasterYSize
+                #
+                #     # Calculate corner coordinates
+                #     xmin = gt[0]
+                #     ymax = gt[3]
+                #     xmax = gt[0] + width * gt[1] + height * gt[2]
+                #     ymin = gt[3] + width * gt[4] + height * gt[5]
+                #
+                #     bounds = [xmin, ymin, xmax, ymax]
+                #
+                #     # Check if CRS is not EPSG:4326
+                #     src_crs = ds.GetProjection()
+                #     if src_crs:
+                #         # Store EPSG code if available
+                #         # Temporarily commented out until GDAL is available
+                #         # src_srs = osr.SpatialReference()
+                #         # src_srs.ImportFromWkt(src_crs)
+                #         # epsg_code = src_srs.GetAuthorityCode(None)
+                #         # if epsg_code:
+                #         #     metadata_dict["original_srid"] = int(epsg_code)
+                #         pass
+                #
+                #     if (
+                #         src_crs
+                #         and "EPSG:4326" not in src_crs
+                #         and "WGS84" not in src_crs
+                #     ):
+                #         # Create transformer from source CRS to WGS84
+                #         # Temporarily commented out until GDAL is available
+                #         # src_srs = osr.SpatialReference()
+                #         # src_srs.ImportFromWkt(src_crs)
+                #         # transformer = Transformer.from_crs(
+                #         #     src_srs.ExportToProj4(), "EPSG:4326", always_xy=True
+                #         # )
+                #         #
+                #         # # Transform the bounds
+                #         # xmin, ymin = transformer.transform(bounds[0], bounds[1])
+                #         # xmax, ymax = transformer.transform(bounds[2], bounds[3])
+                #         pass
+                #
+                #         bounds = [xmin, ymin, xmax, ymax]
 
-                    # Calculate corner coordinates
-                    xmin = gt[0]
-                    ymax = gt[3]
-                    xmax = gt[0] + width * gt[1] + height * gt[2]
-                    ymin = gt[3] + width * gt[4] + height * gt[5]
+                # Default bounds for when GDAL is not available
+                # Default bounds for when GDAL is not available
+                bounds = [-180, -90, 180, 90]  # World bounds as fallback
 
-                    bounds = [xmin, ymin, xmax, ymax]
-
-                    # Check if CRS is not EPSG:4326
-                    src_crs = ds.GetProjection()
-                    if src_crs:
-                        # Store EPSG code if available
-                        src_srs = osr.SpatialReference()
-                        src_srs.ImportFromWkt(src_crs)
-                        epsg_code = src_srs.GetAuthorityCode(None)
-                        if epsg_code:
-                            metadata_dict["original_srid"] = int(epsg_code)
-
-                    if (
-                        src_crs
-                        and "EPSG:4326" not in src_crs
-                        and "WGS84" not in src_crs
-                    ):
-                        # Create transformer from source CRS to WGS84
-                        src_srs = osr.SpatialReference()
-                        src_srs.ImportFromWkt(src_crs)
-                        transformer = Transformer.from_crs(
-                            src_srs.ExportToProj4(), "EPSG:4326", always_xy=True
-                        )
-
-                        # Transform the bounds
-                        xmin, ymin = transformer.transform(bounds[0], bounds[1])
-                        xmax, ymax = transformer.transform(bounds[2], bounds[3])
-
-                        bounds = [xmin, ymin, xmax, ymax]
-
-                    # Get statistics for single-band rasters
-                    if ds.RasterCount == 1:
-                        try:
-                            band = ds.GetRasterBand(1)
-                            # ComputeStatistics(approx_ok, force)
-                            stats = band.ComputeStatistics(
-                                False
-                            )  # [min, max, mean, stdev]
-                            min_val, max_val = stats[0], stats[1]
-                            metadata_dict["raster_value_stats_b1"] = {
-                                "min": min_val,
-                                "max": max_val,
-                            }
-                        except Exception as e:
-                            print(f"Error computing raster statistics: {str(e)}")
-
-                    # Close dataset
-                    ds = None
+            # Get statistics for single-band rasters
+            # Temporarily commented out until GDAL is available
+            # if ds.RasterCount == 1:
+            #     try:
+            #         band = ds.GetRasterBand(1)
+            #         # ComputeStatistics(approx_ok, force)
+            #         stats = band.ComputeStatistics(
+            #             False
+            #         )  # [min, max, mean, stdev]
+            #         min_val, max_val = stats[0], stats[1]
+            #         metadata_dict["raster_value_stats_b1"] = {
+            #             "min": min_val,
+            #             "max": max_val,
+            #         }
+            #     except Exception as e:
+            #         print(f"Error computing raster statistics: {str(e)}")
+            #
+            # # Close dataset
+            # ds = None
             elif layer_type == "point_cloud":
                 # handled above
                 pass

@@ -1,75 +1,86 @@
 // Copyright Bunting Labs, Inc. 2025
 
-import { cogProtocol } from '@geomatico/maplibre-cog-protocol';
-import maplibregl from 'maplibre-gl';
-import { Protocol } from 'pmtiles';
-import { useEffect } from 'react';
-import * as reactRouterDom from 'react-router-dom';
-import { BrowserRouter, Route, Routes } from 'react-router-dom';
-import SuperTokens, { SuperTokensWrapper } from 'supertokens-auth-react';
-import EmailPassword from 'supertokens-auth-react/recipe/emailpassword';
-import { EmailPasswordPreBuiltUI } from 'supertokens-auth-react/recipe/emailpassword/prebuiltui';
-import EmailVerification from 'supertokens-auth-react/recipe/emailverification';
-import { EmailVerificationPreBuiltUI } from 'supertokens-auth-react/recipe/emailverification/prebuiltui';
-import Session, { SessionAuth } from 'supertokens-auth-react/recipe/session';
-import { getSuperTokensRoutesForReactRouterDom } from 'supertokens-auth-react/ui';
-import { AppSidebar } from '@/components/app-sidebar';
-import { SidebarProvider } from '@/components/ui/sidebar';
-import { Toaster } from '@/components/ui/sonner';
+import { cogProtocol } from "@geomatico/maplibre-cog-protocol";
+import maplibregl from "maplibre-gl";
+import { Protocol } from "pmtiles";
+import { useEffect } from "react";
+import * as reactRouterDom from "react-router-dom";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
+import SuperTokens, { SuperTokensWrapper } from "supertokens-auth-react";
+import EmailPassword from "supertokens-auth-react/recipe/emailpassword";
+import { EmailPasswordPreBuiltUI } from "supertokens-auth-react/recipe/emailpassword/prebuiltui";
+import EmailVerification from "supertokens-auth-react/recipe/emailverification";
+import { EmailVerificationPreBuiltUI } from "supertokens-auth-react/recipe/emailverification/prebuiltui";
+import Session, { SessionAuth } from "supertokens-auth-react/recipe/session";
+import { getSuperTokensRoutesForReactRouterDom } from "supertokens-auth-react/ui";
+import { AppSidebar } from "@/components/app-sidebar";
+import { SidebarProvider } from "@/components/ui/sidebar";
+import { Toaster } from "@/components/ui/sonner";
 
-import MapsList from './components/MapsList';
-import ProjectView from './components/ProjectView';
-import PostGISDocumentation from './pages/PostGISDocumentation';
-import './App.css';
+import MapsList from "./components/MapsList";
+import ProjectView from "./components/ProjectView";
+import FeatureMap from "./components/FeatureMap";
+import PostGISDocumentation from "./pages/PostGISDocumentation";
+import "./App.css";
 
 const websiteDomain = import.meta.env.VITE_WEBSITE_DOMAIN;
 if (!websiteDomain) {
-  throw new Error('VITE_WEBSITE_DOMAIN is not defined. Please set it in your .env file or build environment.');
+  throw new Error(
+    "VITE_WEBSITE_DOMAIN is not defined. Please set it in your .env file or build environment."
+  );
 }
 
+// Move SuperTokens initialization inside a function so it only runs when needed
 const emailVerificationMode = import.meta.env.VITE_EMAIL_VERIFICATION;
-if (emailVerificationMode !== 'require' && emailVerificationMode !== 'disable') {
-  throw new Error("VITE_EMAIL_VERIFICATION must be either 'require' or 'disable'");
+if (
+  emailVerificationMode !== "require" &&
+  emailVerificationMode !== "disable"
+) {
+  throw new Error(
+    "VITE_EMAIL_VERIFICATION must be either 'require' or 'disable'"
+  );
 }
-const emailVerificationEnabled = emailVerificationMode === 'require';
+const emailVerificationEnabled = emailVerificationMode === "require";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const recipeList: any[] = [EmailPassword.init(), Session.init()];
-if (emailVerificationEnabled) {
-  recipeList.push(EmailVerification.init({ mode: 'REQUIRED' }));
+function initializeSuperTokens() {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recipeList: any[] = [EmailPassword.init(), Session.init()];
+  if (emailVerificationEnabled) {
+    recipeList.push(EmailVerification.init({ mode: "REQUIRED" }));
+  }
+
+  SuperTokens.init({
+    appInfo: {
+      appName: "Mundi",
+      apiDomain: websiteDomain,
+      websiteDomain: websiteDomain,
+      apiBasePath: "/supertokens",
+      websiteBasePath: "/auth",
+    },
+    recipeList,
+    style: `
+    [data-supertokens~="container"] {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }`,
+  });
 }
 
-SuperTokens.init({
-  appInfo: {
-    appName: 'Mundi',
-    apiDomain: websiteDomain,
-    websiteDomain: websiteDomain,
-    apiBasePath: '/supertokens',
-    websiteBasePath: '/auth',
-  },
-  recipeList,
-  style: `
-  [data-supertokens~="container"] {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  }`,
-});
-
-import { useState } from 'react';
-import { ProjectState } from './lib/types';
+import { useState } from "react";
+import { ProjectState } from "./lib/types";
 
 function AppContent() {
   const [projectState, setProjectState] = useState<ProjectState>({
-    type: 'not_logged_in',
+    type: "not_logged_in",
   });
   const sessionContext = Session.useSessionContext();
 
   useEffect(() => {
     const protocol = new Protocol();
-    maplibregl.addProtocol('pmtiles', protocol.tile);
-    maplibregl.addProtocol('cog', cogProtocol);
+    maplibregl.addProtocol("pmtiles", protocol.tile);
+    maplibregl.addProtocol("cog", cogProtocol);
     return () => {
-      maplibregl.removeProtocol('pmtiles');
-      maplibregl.removeProtocol('cog');
+      maplibregl.removeProtocol("pmtiles");
+      maplibregl.removeProtocol("cog");
     };
   }, []);
 
@@ -79,23 +90,23 @@ function AppContent() {
     }
 
     if (!sessionContext.doesSessionExist) {
-      setProjectState({ type: 'not_logged_in' });
+      setProjectState({ type: "not_logged_in" });
       return;
     }
 
-    setProjectState({ type: 'loading' });
+    setProjectState({ type: "loading" });
 
     const fetchProjects = async () => {
       try {
-        const response = await fetch('/api/projects/');
+        const response = await fetch("/api/projects/");
         if (!response.ok) {
-          throw new Error('Failed to fetch projects');
+          throw new Error("Failed to fetch projects");
         }
         const data = await response.json();
-        setProjectState({ type: 'loaded', projects: data.projects || [] });
+        setProjectState({ type: "loaded", projects: data.projects || [] });
       } catch (error) {
-        console.error('Error fetching projects:', error);
-        setProjectState({ type: 'loaded', projects: [] });
+        console.error("Error fetching projects:", error);
+        setProjectState({ type: "loaded", projects: [] });
       }
     };
 
@@ -111,7 +122,9 @@ function AppContent() {
           {/* SuperTokens Routes for authentication UI */}
           {getSuperTokensRoutesForReactRouterDom(
             reactRouterDom,
-            emailVerificationEnabled ? [EmailPasswordPreBuiltUI, EmailVerificationPreBuiltUI] : [EmailPasswordPreBuiltUI],
+            emailVerificationEnabled
+              ? [EmailPasswordPreBuiltUI, EmailVerificationPreBuiltUI]
+              : [EmailPasswordPreBuiltUI]
           )}
 
           {/* App Routes */}
@@ -131,6 +144,7 @@ function AppContent() {
               </SessionAuth>
             }
           />
+          <Route path="/feature/:projectId" element={<FeatureMap />} />
           <Route
             path="/postgis/:connectionId"
             element={
@@ -146,6 +160,27 @@ function AppContent() {
 }
 
 function App() {
+  // Check if this is a public route that should bypass authentication
+  const isPublicCariraRoute = window.location.pathname.startsWith("/feature/");
+
+  if (isPublicCariraRoute) {
+    // For public Carira routes, render completely independently without any SuperTokens initialization
+    return (
+      <div>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/feature/:projectId" element={<FeatureMap />} />
+          </Routes>
+        </BrowserRouter>
+        <Toaster />
+      </div>
+    );
+  }
+
+  // Initialize SuperTokens only for authenticated routes
+  initializeSuperTokens();
+
+  // For all other routes, use the full authenticated app
   return (
     <SuperTokensWrapper>
       <AppContent />
