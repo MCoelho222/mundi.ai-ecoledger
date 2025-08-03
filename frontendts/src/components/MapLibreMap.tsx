@@ -88,6 +88,7 @@ import {
   ScaleControl,
   LngLatBounds,
   Popup,
+  StyleSpecification,
 } from "maplibre-gl";
 import type {
   ChatCompletionMessageParam,
@@ -136,7 +137,7 @@ import type {
 
 // Define the type for chat completion messages from the database
 interface ChatCompletionMessageRow {
-  id: number;
+  id: string;
   map_id: string;
   sender_id: string;
   message_json: ChatCompletionMessageParam;
@@ -144,15 +145,15 @@ interface ChatCompletionMessageRow {
 }
 
 // Import styles in the parent component
-const KUE_MESSAGE_STYLE = `
-  text-sm
-  [&_table]:w-full [&_table]:border-collapse [&_table]:text-left
-  [&_thead]:border-b-1 [&_thead]:border-gray-600
-  [&_thead_th]:font-semibold
-  [&_tbody_tr]:border-b [&_tbody_tr]:border-gray-200 last:[&_tbody_tr]:border-b-0
-  [&_td]:align-top
-  [&_a]:text-blue-200 [&_a]:underline
-`;
+// const KUE_MESSAGE_STYLE = `
+//   text-sm
+//   [&_table]:w-full [&_table]:border-collapse [&_table]:text-left
+//   [&_thead]:border-b-1 [&_thead]:border-gray-600
+//   [&_thead_th]:font-semibold
+//   [&_tbody_tr]:border-b [&_tbody_tr]:border-gray-200 last:[&_tbody_tr]:border-b-0
+//   [&_td]:align-top
+//   [&_a]:text-blue-200 [&_a]:underline
+// `;
 
 const SWAP_XY = new Matrix4().set(
   0,
@@ -373,7 +374,7 @@ interface MapLibreMapProps {
   className?: string;
   project?: MapProject;
   mapData?: MapData | null;
-  cariraFeatureData?: any; // GeoJSON for Carira features
+  FeatureData?: any; // GeoJSON for Carira features
   isEmbedMode?: boolean;
   openDropzone?: () => void;
   updateMapData?: (mapId: string) => void;
@@ -385,13 +386,12 @@ interface MapLibreMapProps {
 
 export default function MapLibreMap({
   mapId,
-  projectId,
   width = "100%",
   height = "500px",
   className = "",
   project,
   mapData,
-  cariraFeatureData,
+  FeatureData,
   isEmbedMode = false,
   openDropzone,
   updateMapData,
@@ -598,7 +598,7 @@ export default function MapLibreMap({
   const [showMessages, setShowMessages] = useState(true);
 
   useEffect(() => {
-    if (updateMapData) {
+    if (updateMapData && mapId) {
       updateMapData(mapId);
     }
   }, [mapId, updateMapData]);
@@ -945,7 +945,7 @@ export default function MapLibreMap({
         newMap.addControl(new ScaleControl(), "bottom-left");
 
         // Add export PDF control below the navigation controls
-        const exportPDFControl = new ExportPDFControl(mapId);
+        const exportPDFControl = new ExportPDFControl(mapId ?? "");
         exportPDFControlRef.current = exportPDFControl;
         newMap.addControl(exportPDFControl, "top-right");
 
@@ -1053,7 +1053,7 @@ export default function MapLibreMap({
   // Effect to handle Carira feature data rendering
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !cariraFeatureData || !map.isStyleLoaded()) return;
+    if (!map || !FeatureData || !map.isStyleLoaded()) return;
 
     // Add Carira feature source and layer
     const sourceId = "carira-features";
@@ -1071,7 +1071,7 @@ export default function MapLibreMap({
       // Add source
       map.addSource(sourceId, {
         type: "geojson",
-        data: cariraFeatureData,
+        data: FeatureData,
       });
 
       // Add fill layer
@@ -1112,13 +1112,13 @@ export default function MapLibreMap({
       });
 
       // Fit map to feature bounds if in embed mode
-      if (isEmbedMode && cariraFeatureData.features.length > 0) {
+      if (isEmbedMode && FeatureData.features.length > 0) {
         console.log(
           "🔍 DEBUG: Attempting to zoom to Carira features in embed mode"
         );
         console.log("🔍 DEBUG: isEmbedMode:", isEmbedMode);
-        console.log("🔍 DEBUG: cariraFeatureData:", cariraFeatureData);
-        const coordinates = cariraFeatureData.features.reduce(
+        console.log("🔍 DEBUG: FeatureData:", FeatureData);
+        const coordinates = FeatureData.features.reduce(
           (coords: number[][], feature: any) => {
             if (feature.geometry.type === "Polygon") {
               return coords.concat(feature.geometry.coordinates[0]);
@@ -1171,7 +1171,7 @@ export default function MapLibreMap({
           (error instanceof Error ? error.message : String(error))
       );
     }
-  }, [cariraFeatureData, isEmbedMode, addError]);
+  }, [FeatureData, isEmbedMode, addError]);
 
   // Separate effect for style updates
   useEffect(() => {
@@ -1204,7 +1204,7 @@ export default function MapLibreMap({
                 },
                 "carira-feature": {
                   type: "geojson",
-                  data: cariraFeatureData,
+                  data: FeatureData,
                 },
               },
               layers: [
@@ -1251,7 +1251,7 @@ export default function MapLibreMap({
               ],
             };
 
-            map.setStyle(defaultStyle);
+            map.setStyle(defaultStyle as StyleSpecification);
 
             // Add click handler for Carira features after style is loaded
             map.once("styledata", () => {
@@ -1349,17 +1349,13 @@ export default function MapLibreMap({
               );
             });
 
-            if (
-              !hasZoomed &&
-              cariraFeatureData &&
-              cariraFeatureData.features.length > 0
-            ) {
+            if (!hasZoomed && FeatureData && FeatureData.features.length > 0) {
               console.log(
                 "🔍 DEBUG: Attempting to zoom to Carira features in style load"
               );
               // Zoom to the Carira feature if available
               const bounds = new LngLatBounds();
-              cariraFeatureData.features.forEach((feature: any) => {
+              FeatureData.features.forEach((feature: any) => {
                 if (feature.geometry && feature.geometry.coordinates) {
                   if (feature.geometry.type === "Point") {
                     bounds.extend(feature.geometry.coordinates);
@@ -1427,10 +1423,7 @@ export default function MapLibreMap({
         // setStyle on purpose does not reset the zoom/center, but it's nice to load a map
         // and be correctly positioned on the data
         // BUT: Skip this if we have Carira feature data, as we want to zoom to that instead
-        if (
-          !hasZoomed &&
-          !(cariraFeatureData && cariraFeatureData.features.length > 0)
-        ) {
+        if (!hasZoomed && !(FeatureData && FeatureData.features.length > 0)) {
           if (newStyle.center && newStyle.zoom !== undefined) {
             map.jumpTo({
               center: newStyle.center,
@@ -1462,7 +1455,7 @@ export default function MapLibreMap({
     addError,
     loadLegendSymbols,
     hasZoomed,
-    cariraFeatureData,
+    FeatureData,
   ]); // Update when these dependencies change
 
   useEffect(() => {
@@ -1507,7 +1500,7 @@ export default function MapLibreMap({
         // Ensure messages from fetch are sorted by message_index
         const fetchedMessages: ChatCompletionMessageRow[] = data.messages.sort(
           (a: ChatCompletionMessageRow, b: ChatCompletionMessageRow) =>
-            a.id - b.id
+            a.id.localeCompare(b.id)
         );
 
         setMessages(fetchedMessages);
@@ -1549,7 +1542,7 @@ export default function MapLibreMap({
     try {
       let response;
 
-      // Use different endpoints based on whether we have a mapId (authenticated) or cariraFeatureData (public)
+      // Use different endpoints based on whether we have a mapId (authenticated) or FeatureData (public)
       if (mapId) {
         // Authenticated map chat
         response = await fetch(`/api/maps/${mapId}/messages/send`, {
@@ -1559,9 +1552,10 @@ export default function MapLibreMap({
           },
           body: JSON.stringify(userMessage),
         });
-      } else if (cariraFeatureData && cariraFeatureData.features.length > 0) {
+      } else if (FeatureData && FeatureData.features.length > 0) {
         // Public Carira feature chat
-        const featureId = cariraFeatureData.features[0].properties.id;
+        const featureId = FeatureData.features[0].properties.project_id;
+        console.log(FeatureData);
         const chatUrl =
           window.location.hostname === "localhost"
             ? `http://localhost:8000/public/feature/${featureId}/chat`
@@ -1595,20 +1589,24 @@ export default function MapLibreMap({
         // Public Carira feature response
         const userMessage: ChatCompletionMessageRow = {
           id: generateId(),
+          map_id: "", // Provide appropriate map_id if available
+          sender_id: "", // Provide appropriate sender_id if available
           message_json: {
             role: "user",
             content: text,
           },
-          timestamp: new Date(),
+          created_at: new Date().toISOString(),
         };
 
         const assistantMessage: ChatCompletionMessageRow = {
           id: generateId(),
+          map_id: "", // Provide appropriate map_id if available
+          sender_id: "", // Provide appropriate sender_id if available
           message_json: {
             role: "assistant",
             content: data.content,
           },
-          timestamp: new Date(),
+          created_at: new Date().toISOString(),
         };
 
         // Add both user and assistant messages to the messages array
@@ -1907,12 +1905,12 @@ export default function MapLibreMap({
 
   // Determine the last assistant message to display. Only show if it's the very
   // last message in the conversation and has text content.
-  const lastAssistantMsg: string | null =
-    lastMsg &&
-    lastMsg.message_json?.role === "assistant" &&
-    typeof lastMsg.message_json?.content === "string"
-      ? (lastMsg.message_json.content as string)
-      : null;
+  // const lastAssistantMsg: string | null =
+  //   lastMsg &&
+  //   lastMsg.message_json?.role === "assistant" &&
+  //   typeof lastMsg.message_json?.content === "string"
+  //     ? (lastMsg.message_json.content as string)
+  //     : null;
 
   // Determine the last user message for the input placeholder.
   const lastUserMsg: string | null =
@@ -2132,10 +2130,16 @@ export default function MapLibreMap({
 
         {/* Chat Input - Bottom Center */}
         <div
-          className={`z-30 absolute bottom-4 left-1/2 transform -translate-x-1/2 w-4/5 max-w-xl bg-white dark:bg-gray-800 shadow-md focus-within:ring-2 focus-within:ring-blue-500/30 flex items-center border border-input rounded-lg`}
+          className={`z-30 absolute left-1/2 transform -translate-x-1/2 bg-white dark:bg-gray-800 shadow-md focus-within:ring-2 focus-within:ring-blue-500/30 flex items-center border border-input rounded-lg`}
+          style={{
+            bottom: "8px",
+            width: "70%",
+            minWidth: "250px",
+            maxWidth: "500px",
+          }}
         >
           <Input
-            className={`flex-1 border-none shadow-none !bg-transparent focus:!ring-0 focus:!ring-offset-0 focus-visible:!ring-0 focus-visible:!ring-offset-0 focus-visible:!outline-none`}
+            className={`flex-1 border-none shadow-none !bg-transparent focus:!ring-0 focus:!ring-offset-0 focus-visible:!ring-0 focus-visible:!ring-offset-0 focus-visible:!outline-none text-sm`}
             placeholder={lastUserMsg || "Type in for Kue to do something..."}
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
@@ -2174,33 +2178,40 @@ export default function MapLibreMap({
       {/* Chat Response Panel - Right Side */}
       {showMessages && (
         <div
-          className={`z-30 absolute right-16 w-80 h-96 bg-white dark:bg-gray-800 rounded-lg shadow-lg flex flex-col ${
+          className={`z-30 absolute right-2 bg-white dark:bg-gray-800 rounded-lg shadow-lg flex flex-col ${
             criticalErrors.length > 0 || activeActions.length > 0
-              ? "top-32"
-              : "top-4"
+              ? "top-16"
+              : "top-2"
           }`}
+          style={{
+            width: "25%",
+            minWidth: "200px",
+            maxWidth: "300px",
+            height: "60%",
+            maxHeight: "400px",
+          }}
         >
-          {/* Header */}
-          <div className="p-3 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-            <h3 className="font-medium text-gray-800 dark:text-white">
+          {/* Header - More compact */}
+          <div className="p-2 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center flex-shrink-0">
+            <h3 className="font-medium text-gray-800 dark:text-white text-sm">
               Chat with Kue
             </h3>
             <button
               onClick={() => setShowMessages(false)}
-              className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+              className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 text-lg"
             >
               ×
             </button>
           </div>
 
-          {/* Messages Area - Scrollable */}
-          <div className="flex-1 p-3 overflow-y-auto">
+          {/* Messages Area - Scrollable with compact spacing */}
+          <div className="flex-1 p-2 overflow-y-auto">
             {messages.length === 0 ? (
-              <div className="text-gray-500 text-sm text-center mt-8">
+              <div className="text-gray-500 text-xs text-center mt-4">
                 Start a conversation with Kue
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {messages.map((msg, index) => {
                   let contentDisplay = "";
                   const messageJson = msg.message_json;
@@ -2276,7 +2287,7 @@ export default function MapLibreMap({
                       }`}
                     >
                       <div
-                        className={`max-w-xs px-3 py-2 rounded-lg text-sm ${
+                        className={`max-w-[85%] px-2 py-1.5 rounded-lg text-xs ${
                           messageJson.role === "user"
                             ? "bg-blue-500 text-white"
                             : "bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white"
@@ -2294,20 +2305,20 @@ export default function MapLibreMap({
                           </div>
                         )}
 
-                        {/* Render images if present */}
+                        {/* Render images if present - more compact */}
                         {Array.isArray(messageJson.content) &&
                           (messageJson.content as any[])
                             .filter((part: any) => part.type === "image_url")
                             .map((part: any, imgIndex: number) => (
                               <div
                                 key={`msg-${msg.id || index}-img-${imgIndex}`}
-                                className="mt-2"
+                                className="mt-1"
                               >
                                 <img
                                   src={part.image_url.url}
                                   alt="Message attachment"
                                   className="max-w-full rounded-md"
-                                  style={{ maxHeight: "120px" }}
+                                  style={{ maxHeight: "60px" }}
                                 />
                               </div>
                             ))}

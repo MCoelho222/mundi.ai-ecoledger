@@ -6,40 +6,28 @@ import MapLibreMap from "./MapLibreMap";
 import { toast } from "sonner";
 import "maplibre-gl/dist/maplibre-gl.css";
 
-interface CariraFeature {
-  id: number;
-  owner_uuid: string;
-  property_code?: string;
-  municipality?: string;
-  area_id?: string;
-  area_name?: string;
-  app_area?: number;
-  total_area?: number;
-  biomass_area?: number;
-  carbon_area?: number;
-  soil_carbon?: number;
-  tree_carbon?: number;
-  herbaceous_carbon?: number;
-  litter_carbon?: number;
-  total_carbon?: number;
-  annual_carbon_capture?: number;
-  co2_emission?: number;
-  monitoring_date?: string;
-  vegetation_type?: string;
-  land_use?: string;
-  reforestation_age?: number;
-  estimation_method?: string;
-  data_source?: string;
-  estimation_error?: number;
-  responsible?: string;
-  geometry?: any; // GeoJSON geometry
-}
+// interface Feature {
+//   id: number;
+//   user_id?: string;
+//   name?: string;
+//   description?: string;
+//   status?: string;
+//   start_date?: string; // Use string for date fields (ISO format) in TypeScript interfaces
+//   end_date?: string;
+//   area_hectares?: number;
+//   carbon_credits_generated?: number;
+//   location?: string;
+//   project_type?: string;
+//   certification_status?: string;
+//   created_at?: string;
+//   updated_at?: string;
+// }
 
-interface CariraMapData {
+interface MapData {
   type: "FeatureCollection";
   features: Array<{
     type: "Feature";
-    properties: CariraFeature;
+    properties: any;
     geometry: any;
   }>;
 }
@@ -50,8 +38,8 @@ export default function FeatureMap() {
   const featureId = searchParams.get("feature");
   const isEmbedMode = searchParams.get("embed") === "true";
 
-  const [feature, setFeature] = useState<CariraFeature | null>(null);
-  const [mapData, setMapData] = useState<CariraMapData | null>(null);
+  // const [feature, setFeature] = useState<Feature | null>(null);
+  const [mapData, setMapData] = useState<MapData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -73,8 +61,8 @@ export default function FeatureMap() {
       }
 
       const featureData = await response.json();
-      setFeature(featureData);
-
+      // setFeature(featureData);
+      console.log(featureData)
       // Convert to MapLibre-compatible GeoJSON
       if (featureData.geometry) {
         const geoJsonFeature = {
@@ -87,6 +75,7 @@ export default function FeatureMap() {
           type: "FeatureCollection",
           features: [geoJsonFeature],
         });
+        console.log(mapData)
       }
     } catch (err) {
       const errorMessage =
@@ -117,7 +106,7 @@ export default function FeatureMap() {
       >
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading Carira feature...</p>
+          <p className="text-gray-600">Loading Feature...</p>
         </div>
       </div>
     );
@@ -198,8 +187,7 @@ export default function FeatureMap() {
       <div className="flex-1 relative">
         {mapData && projectId ? (
           <MapLibreMap
-            projectId={projectId}
-            cariraFeatureData={mapData}
+            FeatureData={mapData}
             isEmbedMode={isEmbedMode}
           />
         ) : (
@@ -212,7 +200,7 @@ export default function FeatureMap() {
       </div>
 
       {/* Feature Details Panel (only in non-embed mode) */}
-      {!isEmbedMode && feature && (
+      {/* {!isEmbedMode && feature && (
         <div className="bg-white border-t border-gray-200 p-4 max-h-48 overflow-y-auto">
           <h3 className="text-lg font-semibold mb-3">
             Carbon Monitoring Details
@@ -278,7 +266,7 @@ export default function FeatureMap() {
             )}
           </div>
         </div>
-      )}
+      )} */}
     </div>
   );
 }
