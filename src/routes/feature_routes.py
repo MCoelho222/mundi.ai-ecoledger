@@ -411,7 +411,7 @@ async def list_features_public(
     response_model=FeatureResponse,
     operation_id="get_feature_public",
 )
-async def get_feature_public(feature_id: int):
+async def get_feature_public(feature_id: str):
     """
     Public endpoint to get a specific Feature by ID for map display.
     Returns full feature data including geometry for map visualization.
@@ -427,7 +427,6 @@ async def get_feature_public(feature_id: int):
                 """,
                 feature_id,
             )
-
             if not feature_data:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -435,13 +434,23 @@ async def get_feature_public(feature_id: int):
                 )
 
             feature_dict = dict(feature_data)
+            feature_dict['project_id'] = str(feature_dict['project_id'])
             # Parse geometry JSON if it exists
             if feature_dict.get("geometry"):
                 try:
                     feature_dict["geometry"] = json.loads(feature_dict["geometry"])
                 except (json.JSONDecodeError, TypeError):
                     feature_dict["geometry"] = None
+            # Parse geometry JSON if it exists
+            if feature_dict.get("properties"):
+                try:
+                    feature_dict["properties"] = json.loads(feature_dict["properties"])
+                except (json.JSONDecodeError, TypeError):
+                    feature_dict["properties"] = None
 
+            print("--------")
+            print(dict(feature_data))
+            print("--------")
             return FeatureResponse(**feature_dict)
 
     except HTTPException:
@@ -458,7 +467,7 @@ async def get_feature_public(feature_id: int):
     "/create-map-for-feature/{feature_id}",
     operation_id="create_public_map_for_feature",
 )
-async def create_public_map_for_feature(feature_id: int):
+async def create_public_map_for_feature(feature_id: str):
     """
     Create a public map that displays a specific Feature.
     This endpoint creates a temporary map that can be embedded in iframes.
@@ -498,7 +507,15 @@ async def create_public_map_for_feature(feature_id: int):
                 system_user_id,
                 f"%Project - {feature_id}%",
             )
-
+            print({
+                    "success": True,
+                    "message": "Public map already exists for this feature",
+                    "project_id": existing_map["project_id"],
+                    "map_id": existing_map["id"],
+                    "feature_id": feature_id,
+                    "map_url": f"/feature/{existing_map['project_id']}?feature={feature_id}",
+                    "embed_url": f"/feature/{existing_map['project_id']}?feature={feature_id}&embed=true",
+                })
             if existing_map:
                 return {
                     "success": True,
@@ -546,7 +563,7 @@ async def create_public_map_for_feature(feature_id: int):
                 map_title,
                 map_description,
             )
-
+            print(f"Created public map {map_id} for feature {feature_id} in project {project_id}")
             # Update project to include this map
             await conn.execute(
                 """
@@ -558,6 +575,7 @@ async def create_public_map_for_feature(feature_id: int):
                 project_id,
             )
 
+            print(f"Public map created successfully for feature {feature_id}: {map_id}")
             return {
                 "success": True,
                 "message": "Public map created successfully for feature",

@@ -67,7 +67,7 @@ app = FastAPI(
 # Add CORS middleware to allow frontend access from localhost:5173 and null origin for local file access
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000", "null"],
+    allow_origins=["http://localhost:5173", "http://localhost:3000", "http://localhost:8081", "null"],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
