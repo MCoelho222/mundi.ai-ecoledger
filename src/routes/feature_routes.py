@@ -15,8 +15,8 @@
 
 from fastapi import APIRouter, HTTPException, status, Depends
 from pydantic import BaseModel
-from typing import List, Optional
-from datetime import date
+from typing import List, Optional, Any
+from datetime import date, datetime
 from uuid import UUID
 import logging
 import json
@@ -306,6 +306,7 @@ class FeatureResponse(BaseModel):
     project_id: Optional[str] = None
     geometry: Optional[dict] = None  # GeoJSON geometry object
     properties: Optional[dict] = None  # Feature properties
+    
 
 
 class CariraFeatureCreateResponse(BaseModel):
@@ -425,9 +426,8 @@ async def get_feature_public(feature_id: str):
         async with get_async_db_connection() as conn:
             feature_data = await conn.fetchrow(
                 """
-                SELECT 
-                    id, project_id, properties, geometry
-                FROM project_areas 
+                SELECT id, project_id, geometry, properties
+                FROM project_areas
                 WHERE project_id = $1
                 """,
                 feature_id,
@@ -509,17 +509,7 @@ async def create_public_map_for_feature(feature_id: str):
                 system_user_id,
                 f"%Project - {feature_id}%",
             )
-            print(
-                {
-                    "success": True,
-                    "message": "Public map already exists for this feature",
-                    "project_id": existing_map["project_id"],
-                    "map_id": existing_map["id"],
-                    "feature_id": feature_id,
-                    "map_url": f"/feature/{existing_map['project_id']}?feature={feature_id}",
-                    "embed_url": f"/feature/{existing_map['project_id']}?feature={feature_id}&embed=true",
-                }
-            )
+
             if existing_map:
                 return {
                     "success": True,
