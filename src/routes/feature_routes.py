@@ -50,64 +50,84 @@ async def generate_intelligent_response(
 
         # Create context about the carbon monitoring feature
         area_name = (
-            feature_context.get("area_name")
-            or f"Feature {feature_context.get('feature_id')}"
+            feature_context.get("name")
+            or f"Project {feature_context.get('project_id')}"
         )
 
         # Build a comprehensive context string for the AI
         context_parts = []
-        context_parts.append(f"Carbon monitoring data for {area_name}:")
+        context_parts.append(f"Carbon monitoring project data for {area_name}:")
 
-        if feature_context.get("municipality"):
-            context_parts.append(f"- Location: {feature_context['municipality']}")
-        if feature_context.get("total_area"):
+        if feature_context.get("location"):
+            context_parts.append(f"- Location: {feature_context['location']}")
+
+        if feature_context.get("area_hectares") is not None:
             context_parts.append(
-                f"- Total Area: {feature_context['total_area']:.2f} hectares"
+                f"- Project Area: {feature_context['area_hectares']:.2f} hectares"
             )
-        if feature_context.get("total_carbon"):
+
+        if feature_context.get("carbon_credits_generated") is not None:
             context_parts.append(
-                f"- Total Carbon Storage: {feature_context['total_carbon']:.2f} tons"
+                f"- Carbon Credits Generated: {feature_context['carbon_credits_generated']:.2f} credits"
             )
-        if feature_context.get("soil_carbon"):
+
+        if feature_context.get("project_type"):
+            context_parts.append(f"- Project Type: {feature_context['project_type']}")
+
+        if feature_context.get("status"):
+            context_parts.append(f"- Status: {feature_context['status']}")
+
+        if feature_context.get("certification_status"):
             context_parts.append(
-                f"- Soil Carbon: {feature_context['soil_carbon']:.2f} tons"
+                f"- Certification Status: {feature_context['certification_status']}"
             )
-        if feature_context.get("tree_carbon"):
+
+        if feature_context.get("start_date"):
+            context_parts.append(f"- Start Date: {feature_context['start_date']}")
+
+        if feature_context.get("end_date"):
+            context_parts.append(f"- End Date: {feature_context['end_date']}")
+
+        if feature_context.get("description"):
+            context_parts.append(f"- Description: {feature_context['description']}")
+
+        if feature_context.get("created_at"):
+            context_parts.append(f"- Created: {feature_context['created_at']}")
+
+        if feature_context.get("updated_at"):
+            context_parts.append(f"- Last Updated: {feature_context['updated_at']}")
+
+        if feature_context.get("project_area_id"):
+            context_parts.append(f"- Area ID: {feature_context['project_area_id']}")
+
+        if feature_context.get("geometry"):
             context_parts.append(
-                f"- Tree Carbon: {feature_context['tree_carbon']:.2f} tons"
+                f"- Geometry present (GeoJSON): {feature_context['geometry']}"
             )
-        if feature_context.get("annual_carbon_capture"):
+
+        if feature_context.get("properties"):
             context_parts.append(
-                f"- Annual Carbon Capture: {feature_context['annual_carbon_capture']:.2f} tons/year"
-            )
-        if feature_context.get("vegetation_type"):
-            context_parts.append(
-                f"- Vegetation Type: {feature_context['vegetation_type']}"
-            )
-        if feature_context.get("land_use"):
-            context_parts.append(f"- Land Use: {feature_context['land_use']}")
-        if feature_context.get("monitoring_date"):
-            context_parts.append(
-                f"- Monitoring Date: {feature_context['monitoring_date']}"
+                f"- Additional Properties: {feature_context['properties']}"
             )
 
         context_text = "\n".join(context_parts)
 
-        # Create system prompt for carbon data analysis
-        system_prompt = f"""You are an expert carbon monitoring and environmental data analyst. You help users understand carbon storage, sequestration, and environmental data from monitoring sites.
+        # Create system prompt for carbon project analysis
+        system_prompt = f"""You are an expert carbon monitoring and environmental project analyst. You help users understand carbon credit projects, environmental monitoring data, and project management information.
 
-Current monitoring site data:
+Current carbon project data:
 {context_text}
 
 Guidelines:
-- Provide accurate, helpful information about carbon storage and environmental data
+- Provide accurate, helpful information about carbon credit projects and environmental data
 - Explain concepts clearly for both technical and non-technical users
-- Use the specific data provided when answering questions
-- If asked about comparisons, provide context about typical values
+- Use the specific project data provided when answering questions
+- If asked about comparisons, provide context about typical project values
 - Be concise but informative
 - Focus on actionable insights when possible
+- Discuss project status, certification, and carbon credit generation when relevant
 
-Answer the user's question about this carbon monitoring data."""
+Answer the user's question about this carbon monitoring project."""
 
         # Call OpenAI API
         response = await client.chat.completions.create(
@@ -134,139 +154,124 @@ def generate_fallback_response(user_message: str, feature_context: dict) -> str:
     This function analyzes the user's message and provides relevant information.
     """
     message_lower = user_message.lower()
-    area_name = (
-        feature_context.get("area_name")
-        or f"Feature {feature_context.get('feature_id')}"
+    project_name = (
+        feature_context.get("name") or f"Project {feature_context.get('project_id')}"
     )
 
     # Carbon-related questions
-    if any(word in message_lower for word in ["carbon", "co2", "emissions", "storage"]):
-        if "total" in message_lower:
-            total_carbon = feature_context.get("total_carbon")
-            if total_carbon:
-                return f"The total carbon storage for {area_name} is {total_carbon:.2f} tons. This includes soil carbon ({feature_context.get('soil_carbon', 0):.2f} tons) and tree carbon ({feature_context.get('tree_carbon', 0):.2f} tons)."
+    if any(word in message_lower for word in ["carbon", "co2", "emissions", "credits"]):
+        if "credits" in message_lower or "generated" in message_lower:
+            carbon_credits = feature_context.get("carbon_credits_generated")
+            if carbon_credits:
+                return f"The project {project_name} has generated {carbon_credits:.2f} carbon credits. These credits represent verified carbon sequestration or emission reductions."
             else:
-                return f"Total carbon data is not available for {area_name}."
-
-        elif "soil" in message_lower:
-            soil_carbon = feature_context.get("soil_carbon")
-            if soil_carbon:
-                return f"The soil carbon storage for {area_name} is {soil_carbon:.2f} tons. Soil carbon is crucial for long-term carbon sequestration and soil health."
-            else:
-                return f"Soil carbon data is not available for {area_name}."
-
-        elif "tree" in message_lower or "forest" in message_lower:
-            tree_carbon = feature_context.get("tree_carbon")
-            if tree_carbon:
-                return f"The tree carbon storage for {area_name} is {tree_carbon:.2f} tons. Trees are important for above-ground carbon sequestration."
-            else:
-                return f"Tree carbon data is not available for {area_name}."
-
-        elif "capture" in message_lower or "annual" in message_lower:
-            annual_capture = feature_context.get("annual_carbon_capture")
-            if annual_capture:
-                return f"The annual carbon capture rate for {area_name} is {annual_capture:.2f} tons per year. This represents the ongoing carbon sequestration capacity."
-            else:
-                return f"Annual carbon capture data is not available for {area_name}."
+                return f"Carbon credits data is not available for {project_name}."
 
         else:
             # General carbon overview
             parts = []
-            if feature_context.get("total_carbon"):
+            if feature_context.get("carbon_credits_generated"):
                 parts.append(
-                    f"Total carbon: {feature_context['total_carbon']:.2f} tons"
+                    f"Carbon credits generated: {feature_context['carbon_credits_generated']:.2f} credits"
                 )
-            if feature_context.get("annual_carbon_capture"):
-                parts.append(
-                    f"Annual capture: {feature_context['annual_carbon_capture']:.2f} tons/year"
-                )
+            if feature_context.get("project_type"):
+                parts.append(f"Project type: {feature_context['project_type']}")
 
             if parts:
-                return f"Carbon data for {area_name}: {', '.join(parts)}."
+                return f"Carbon information for {project_name}: {', '.join(parts)}."
             else:
-                return f"Carbon data is not available for {area_name}."
+                return f"Carbon data is not available for {project_name}."
 
     # Area and size questions
     elif any(
         word in message_lower for word in ["area", "size", "hectare", "big", "large"]
     ):
-        total_area = feature_context.get("total_area")
-        if total_area:
-            return f"The total area of {area_name} is {total_area:.2f} hectares. For reference, that's equivalent to {total_area * 10000:.0f} square meters."
+        area_hectares = feature_context.get("area_hectares")
+        if area_hectares:
+            return f"The project area of {project_name} is {area_hectares:.2f} hectares. For reference, that's equivalent to {area_hectares * 10000:.0f} square meters."
         else:
-            return f"Area data is not available for {area_name}."
+            return f"Area data is not available for {project_name}."
 
     # Location questions
-    elif any(
-        word in message_lower for word in ["location", "where", "municipality", "place"]
-    ):
-        municipality = feature_context.get("municipality")
-        if municipality:
-            return f"{area_name} is located in {municipality}."
+    elif any(word in message_lower for word in ["location", "where", "place"]):
+        location = feature_context.get("location")
+        if location:
+            return f"{project_name} is located in {location}."
         else:
-            return f"Location information is not available for {area_name}."
+            return f"Location information is not available for {project_name}."
 
-    # Vegetation and land use questions
+    # Project type and status questions
     elif any(
-        word in message_lower
-        for word in ["vegetation", "plant", "land use", "forest", "agricultural"]
+        word in message_lower for word in ["type", "status", "certification", "project"]
     ):
-        vegetation = feature_context.get("vegetation_type")
-        land_use = feature_context.get("land_use")
+        project_type = feature_context.get("project_type")
+        status = feature_context.get("status")
+        certification_status = feature_context.get("certification_status")
 
         response_parts = []
-        if vegetation:
-            response_parts.append(f"Vegetation type: {vegetation}")
-        if land_use:
-            response_parts.append(f"Land use: {land_use}")
+        if project_type:
+            response_parts.append(f"Project type: {project_type}")
+        if status:
+            response_parts.append(f"Status: {status}")
+        if certification_status:
+            response_parts.append(f"Certification: {certification_status}")
 
         if response_parts:
-            return f"For {area_name}: {', '.join(response_parts)}."
+            return f"For {project_name}: {', '.join(response_parts)}."
         else:
-            return f"Vegetation and land use data is not available for {area_name}."
+            return f"Project details are not available for {project_name}."
 
-    # Monitoring and data questions
+    # Date and timeline questions
     elif any(
-        word in message_lower
-        for word in ["monitoring", "data", "when", "date", "measured"]
+        word in message_lower for word in ["date", "when", "start", "end", "timeline"]
     ):
-        monitoring_date = feature_context.get("monitoring_date")
-        if monitoring_date:
-            return f"The monitoring data for {area_name} was collected on {monitoring_date}."
+        start_date = feature_context.get("start_date")
+        end_date = feature_context.get("end_date")
+
+        response_parts = []
+        if start_date:
+            response_parts.append(f"Start date: {start_date}")
+        if end_date:
+            response_parts.append(f"End date: {end_date}")
+
+        if response_parts:
+            return f"Timeline for {project_name}: {', '.join(response_parts)}."
         else:
-            return f"Monitoring date information is not available for {area_name}."
+            return f"Timeline information is not available for {project_name}."
 
     # Comparison questions
     elif any(
         word in message_lower for word in ["compare", "better", "worse", "good", "bad"]
     ):
-        return f"To properly compare {area_name}, I would need data from other similar areas. Currently, I can provide detailed information about this specific feature's carbon storage and characteristics."
+        return f"To properly compare {project_name}, I would need data from other similar projects. Currently, I can provide detailed information about this specific project's characteristics and performance."
 
     # General/greeting questions
     elif any(
         word in message_lower for word in ["hello", "hi", "help", "what can", "about"]
     ):
-        return f"Hello! I can help you analyze the carbon monitoring data for {area_name}. You can ask me about carbon storage, area size, location, vegetation types, monitoring dates, or request specific calculations. What would you like to know?"
+        return f"Hello! I can help you analyze the carbon project data for {project_name}. You can ask me about carbon credits, project area, location, project type, status, certification, timeline, or request specific information. What would you like to know?"
 
     # Default response with summary
     else:
         summary_parts = []
-        if feature_context.get("total_carbon"):
+        if feature_context.get("carbon_credits_generated"):
             summary_parts.append(
-                f"stores {feature_context['total_carbon']:.2f} tons of carbon"
+                f"has generated {feature_context['carbon_credits_generated']:.2f} carbon credits"
             )
-        if feature_context.get("total_area"):
-            summary_parts.append(f"covers {feature_context['total_area']:.2f} hectares")
-        if feature_context.get("municipality"):
-            summary_parts.append(f"is located in {feature_context['municipality']}")
+        if feature_context.get("area_hectares"):
+            summary_parts.append(
+                f"covers {feature_context['area_hectares']:.2f} hectares"
+            )
+        if feature_context.get("location"):
+            summary_parts.append(f"is located in {feature_context['location']}")
 
         summary = (
-            f"{area_name} " + " and ".join(summary_parts)
+            f"{project_name} " + " and ".join(summary_parts)
             if summary_parts
-            else f"{area_name} has carbon monitoring data available"
+            else f"{project_name} has carbon project data available"
         )
 
-        return f'I understand you\'re asking about: "{user_message}"\n\n{summary}. You can ask me specific questions about carbon storage, area size, vegetation, monitoring methods, or request detailed calculations.'
+        return f'I understand you\'re asking about: "{user_message}"\n\n{summary}. You can ask me specific questions about carbon credits, project area, location, project type, status, certification, or timeline.'
 
 
 class CariraFeatureCreate(BaseModel):
@@ -434,7 +439,7 @@ async def get_feature_public(feature_id: str):
                 )
 
             feature_dict = dict(feature_data)
-            feature_dict['project_id'] = str(feature_dict['project_id'])
+            feature_dict["project_id"] = str(feature_dict["project_id"])
             # Parse geometry JSON if it exists
             if feature_dict.get("geometry"):
                 try:
@@ -448,9 +453,6 @@ async def get_feature_public(feature_id: str):
                 except (json.JSONDecodeError, TypeError):
                     feature_dict["properties"] = None
 
-            print("--------")
-            print(dict(feature_data))
-            print("--------")
             return FeatureResponse(**feature_dict)
 
     except HTTPException:
@@ -507,7 +509,8 @@ async def create_public_map_for_feature(feature_id: str):
                 system_user_id,
                 f"%Project - {feature_id}%",
             )
-            print({
+            print(
+                {
                     "success": True,
                     "message": "Public map already exists for this feature",
                     "project_id": existing_map["project_id"],
@@ -515,7 +518,8 @@ async def create_public_map_for_feature(feature_id: str):
                     "feature_id": feature_id,
                     "map_url": f"/feature/{existing_map['project_id']}?feature={feature_id}",
                     "embed_url": f"/feature/{existing_map['project_id']}?feature={feature_id}&embed=true",
-                })
+                }
+            )
             if existing_map:
                 return {
                     "success": True,
@@ -563,7 +567,9 @@ async def create_public_map_for_feature(feature_id: str):
                 map_title,
                 map_description,
             )
-            print(f"Created public map {map_id} for feature {feature_id} in project {project_id}")
+            print(
+                f"Created public map {map_id} for feature {feature_id} in project {project_id}"
+            )
             # Update project to include this map
             await conn.execute(
                 """
@@ -600,7 +606,7 @@ async def create_public_map_for_feature(feature_id: str):
     "/feature/{feature_id}/chat", operation_id="chat_with_carira_feature"
 )
 async def chat_with_carira_feature(
-    feature_id: int,
+    feature_id: str,
     request: dict,  # Simple dict to receive the chat message
     chat_args: ChatArgsProvider = Depends(get_chat_args_provider),
 ):
@@ -617,53 +623,87 @@ async def chat_with_carira_feature(
             )
 
         async with get_async_db_connection() as conn:
-            # Get feature data with geometry
-            feature_data = await conn.fetchrow(
+            # Get feature data from projects
+            feature_data_from_projects = await conn.fetchrow(
                 """
                 SELECT 
-                    id, area_name, municipality, owner_uuid, area_id, property_code,
-                    app_area, total_area, biomass_area, carbon_area,
-                    soil_carbon, tree_carbon, herbaceous_carbon, litter_carbon, total_carbon,
-                    annual_carbon_capture, co2_emission, monitoring_date,
-                    vegetation_type, land_use, reforestation_age,
-                    estimation_method, data_source, estimation_error, responsible,
-                    ST_AsGeoJSON(geometry) as geometry_json
-                FROM carira_features 
+                    id,
+                    user_id,
+                    name,
+                    description,
+                    status,
+                    start_date,
+                    end_date,
+                    area_hectares,
+                    carbon_credits_generated,
+                    location,
+                    project_type,
+                    certification_status,
+                    created_at,
+                    updated_at
+                FROM projects 
                 WHERE id = $1
                 """,
                 feature_id,
             )
-
-            if not feature_data:
+            print(feature_data_from_projects)
+            if not feature_data_from_projects:
                 raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND, detail="Feature not found"
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Feature not found in projects",
+                )
+
+            # Get feature data with geometry
+            feature_data_from_project_areas = await conn.fetchrow(
+                """
+                SELECT 
+                    id,
+                    project_id,
+                    geometry,
+                    properties
+                FROM project_areas 
+                WHERE project_id = $1
+                """,
+                feature_id,
+            )
+
+            if not feature_data_from_project_areas:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Feature not found in project areas",
                 )
 
             # Create context about the feature for the AI
             feature_context = {
-                "feature_id": feature_data["id"],
-                "area_name": feature_data["area_name"],
-                "municipality": feature_data["municipality"],
-                "total_area": float(feature_data["total_area"])
-                if feature_data["total_area"]
+                "project_id": str(feature_data_from_projects["id"]),
+                "user_id": str(feature_data_from_projects["user_id"]),
+                "name": feature_data_from_projects["name"],
+                "description": feature_data_from_projects["description"],
+                "status": feature_data_from_projects["status"],
+                "start_date": feature_data_from_projects["start_date"].isoformat()
+                if feature_data_from_projects["start_date"]
                 else None,
-                "total_carbon": float(feature_data["total_carbon"])
-                if feature_data["total_carbon"]
+                "end_date": feature_data_from_projects["end_date"].isoformat()
+                if feature_data_from_projects["end_date"]
                 else None,
-                "soil_carbon": float(feature_data["soil_carbon"])
-                if feature_data["soil_carbon"]
+                "area_hectares": feature_data_from_projects["area_hectares"],
+                "carbon_credits_generated": feature_data_from_projects[
+                    "carbon_credits_generated"
+                ],
+                "location": feature_data_from_projects["location"],
+                "project_type": feature_data_from_projects["project_type"],
+                "certification_status": feature_data_from_projects[
+                    "certification_status"
+                ],
+                "created_at": feature_data_from_projects["created_at"].isoformat()
+                if feature_data_from_projects["created_at"]
                 else None,
-                "tree_carbon": float(feature_data["tree_carbon"])
-                if feature_data["tree_carbon"]
+                "updated_at": feature_data_from_projects["updated_at"].isoformat()
+                if feature_data_from_projects["updated_at"]
                 else None,
-                "annual_carbon_capture": float(feature_data["annual_carbon_capture"])
-                if feature_data["annual_carbon_capture"]
-                else None,
-                "vegetation_type": feature_data["vegetation_type"],
-                "land_use": feature_data["land_use"],
-                "monitoring_date": feature_data["monitoring_date"].isoformat()
-                if feature_data["monitoring_date"]
-                else None,
+                "project_area_id": str(feature_data_from_project_areas["id"]),
+                "geometry": feature_data_from_project_areas["geometry"],
+                "properties": feature_data_from_project_areas["properties"]
             }
 
             # Create an intelligent AI-powered response based on the user's question

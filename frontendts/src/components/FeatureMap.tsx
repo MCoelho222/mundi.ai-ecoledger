@@ -62,7 +62,7 @@ export default function FeatureMap() {
 
       const featureData = await response.json();
       // setFeature(featureData);
-
+      console.log(featureData)
       // Convert to MapLibre-compatible GeoJSON
       if (featureData.geometry) {
         const geoJsonFeature = {
@@ -75,6 +75,7 @@ export default function FeatureMap() {
           type: "FeatureCollection",
           features: [geoJsonFeature],
         });
+        console.log(mapData)
       }
     } catch (err) {
       const errorMessage =
