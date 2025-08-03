@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import MapLibreMap from "./MapLibreMap";
 import { toast } from "sonner";
+import { buildApiUrl } from "../lib/config";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 // interface Feature {
@@ -50,10 +51,7 @@ export default function FeatureMap() {
       setError(null);
 
       // Use public API endpoint to avoid authentication issues in iframe embeds
-      const apiUrl =
-        window.location.hostname === "localhost"
-          ? `http://localhost:8000/public/feature/${id}`
-          : `/public/feature/${id}`;
+      const apiUrl = buildApiUrl(`/public/feature/${id}`, true);
 
       const response = await fetch(apiUrl);
       if (!response.ok) {
@@ -62,7 +60,7 @@ export default function FeatureMap() {
 
       const featureData = await response.json();
       // setFeature(featureData);
-      console.log(featureData)
+      console.log(featureData);
       // Convert to MapLibre-compatible GeoJSON
       if (featureData.geometry) {
         const geoJsonFeature = {
@@ -75,7 +73,7 @@ export default function FeatureMap() {
           type: "FeatureCollection",
           features: [geoJsonFeature],
         });
-        console.log(mapData)
+        console.log(mapData);
       }
     } catch (err) {
       const errorMessage =
@@ -186,10 +184,7 @@ export default function FeatureMap() {
       {/* Map Container */}
       <div className="flex-1 relative">
         {mapData && projectId ? (
-          <MapLibreMap
-            FeatureData={mapData}
-            isEmbedMode={isEmbedMode}
-          />
+          <MapLibreMap FeatureData={mapData} isEmbedMode={isEmbedMode} />
         ) : (
           <div className="flex items-center justify-center h-full">
             <p className="text-gray-600">

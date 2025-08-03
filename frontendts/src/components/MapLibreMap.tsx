@@ -109,6 +109,7 @@ import { useNavigate } from "react-router-dom";
 import useWebSocket from "react-use-websocket";
 import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
+import { buildApiUrl } from "../lib/config";
 import AttributeTable from "@/components/AttributeTable";
 import LayerList from "@/components/LayerList";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -1556,10 +1557,7 @@ export default function MapLibreMap({
         // Public Carira feature chat
         const featureId = FeatureData.features[0].properties.project_id;
         console.log(FeatureData);
-        const chatUrl =
-          window.location.hostname === "localhost"
-            ? `http://localhost:8000/public/feature/${featureId}/chat`
-            : `/public/feature/${featureId}/chat`;
+        const chatUrl = buildApiUrl(`/public/feature/${featureId}/chat`, true);
 
         response = await fetch(chatUrl, {
           method: "POST",

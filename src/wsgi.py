@@ -64,10 +64,16 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Add CORS middleware to allow frontend access from localhost:5173 and null origin for local file access
+# Add CORS middleware to allow frontend access from configured origins
+cors_origins = [
+    os.getenv("FRONT_MUNDI_BASE_URL", "http://localhost:5173"),
+    os.getenv("UNKNOWN_BASE_URL", "http://localhost:3000"),
+    os.getenv("ECOLEDGER_FRONT_BASE_URL", "http://localhost:8081"),
+    "null",  # Allow null origin for local file access
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000", "http://localhost:8081", "null"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
