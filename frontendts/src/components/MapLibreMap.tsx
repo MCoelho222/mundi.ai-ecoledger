@@ -1111,14 +1111,8 @@ export default function MapLibreMap({
           ],
         },
       });
-
       // Fit map to feature bounds if in embed mode
       if (isEmbedMode && FeatureData.features.length > 0) {
-        console.log(
-          "🔍 DEBUG: Attempting to zoom to Carira features in embed mode"
-        );
-        console.log("🔍 DEBUG: isEmbedMode:", isEmbedMode);
-        console.log("🔍 DEBUG: FeatureData:", FeatureData);
         const coordinates = FeatureData.features.reduce(
           (coords: number[][], feature: any) => {
             if (feature.geometry.type === "Polygon") {
@@ -1132,10 +1126,6 @@ export default function MapLibreMap({
         );
 
         if (coordinates.length > 0) {
-          console.log(
-            "🎯 DEBUG: Found coordinates, fitting bounds with high zoom"
-          );
-          console.log("🎯 DEBUG: coordinates:", coordinates);
           const bounds = coordinates.reduce(
             (bounds: LngLatBounds, coord: number[]) => {
               return bounds.extend(coord as [number, number]);
@@ -1143,12 +1133,9 @@ export default function MapLibreMap({
             new LngLatBounds(coordinates[0], coordinates[0])
           );
 
-          console.log("🎯 DEBUG: bounds:", bounds);
-
           // Use smaller padding and higher maxZoom for better visibility of geometry
           // Add a small delay to ensure the map is fully loaded
           setTimeout(() => {
-            console.log("🎯 DEBUG: Executing fitBounds with maxZoom 18");
             map.fitBounds(bounds, {
               padding: 10,
               maxZoom: 18, // Much higher zoom to ensure geometry is clearly visible
@@ -1351,9 +1338,6 @@ export default function MapLibreMap({
             });
 
             if (!hasZoomed && FeatureData && FeatureData.features.length > 0) {
-              console.log(
-                "🔍 DEBUG: Attempting to zoom to Carira features in style load"
-              );
               // Zoom to the Carira feature if available
               const bounds = new LngLatBounds();
               FeatureData.features.forEach((feature: any) => {
@@ -1375,9 +1359,6 @@ export default function MapLibreMap({
               });
 
               if (!bounds.isEmpty()) {
-                console.log(
-                  "🎯 DEBUG: Found bounds in style load, fitting with high zoom"
-                );
                 // Use smaller padding and higher maxZoom for better visibility of geometry
                 // Add a small delay to ensure the map is fully loaded
                 setTimeout(() => {
@@ -1555,8 +1536,7 @@ export default function MapLibreMap({
         });
       } else if (FeatureData && FeatureData.features.length > 0) {
         // Public Carira feature chat
-        const featureId = FeatureData.features[0].properties.project_id;
-        console.log(FeatureData);
+        const featureId = FeatureData.features[0].properties.id;
         const chatUrl = buildApiUrl(`/public/feature/${featureId}/chat`, true);
 
         response = await fetch(chatUrl, {

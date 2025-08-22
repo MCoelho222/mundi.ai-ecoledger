@@ -59,21 +59,18 @@ export default function FeatureMap() {
       }
 
       const featureData = await response.json();
-      // setFeature(featureData);
-      console.log(featureData);
       // Convert to MapLibre-compatible GeoJSON
-      if (featureData.geometry) {
+      if (featureData.project_geometry.features[0].geometry) {
         const geoJsonFeature = {
           type: "Feature" as const,
           properties: featureData,
-          geometry: featureData.geometry,
+          geometry: featureData.project_geometry.features[0].geometry,
         };
 
         setMapData({
           type: "FeatureCollection",
           features: [geoJsonFeature],
         });
-        console.log(mapData);
       }
     } catch (err) {
       const errorMessage =

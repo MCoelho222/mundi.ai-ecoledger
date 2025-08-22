@@ -15,6 +15,9 @@
 
 from abc import ABC, abstractmethod
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 class ChatArgsProvider(ABC):

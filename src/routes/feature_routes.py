@@ -15,7 +15,7 @@
 
 from fastapi import APIRouter, HTTPException, status, Depends
 from pydantic import BaseModel
-from typing import List, Optional, Any
+from typing import List, Optional, Any, Dict
 from datetime import date, datetime
 from uuid import UUID
 import logging
@@ -34,118 +34,132 @@ logger = logging.getLogger(__name__)
 iframe_router = APIRouter()
 iframe_public_router = APIRouter()
 
+def _fmt_date(val: Any) -> str:
+    # Accept already-ISO strings, datetime objects, or None
+    try:
+        return val.isoformat()  # datetime-like
+    except AttributeError:
+        return str(val) if val is not None else ""
+
+def _fmt_number(val: Any) -> str:
+    try:
+        # Keep integers as integers; floats with up to 2 decimals
+        if isinstance(val, int):
+            return f"{val:,}"
+        n = float(val)
+        return f"{n:,.2f}"
+    except Exception:
+        return str(val) if val is not None else ""
+
+def _fmt_geo(geo: Any, max_chars: int = 600) -> str:
+    if geo is None:
+        return ""
+    try:
+        s = json.dumps(geo, ensure_ascii=False, separators=(",", ":"))
+    except Exception:
+        s = str(geo)
+    return (s[: max_chars - 3] + "...") if len(s) > max_chars else s
+
+def _add(ctx: Dict[str, Any], parts: list[str], key: str, label: str, fmt=str):
+    v = ctx.get(key)
+    if v not in (None, "", []):
+        try:
+            parts.append(f"- {label}: {fmt(v)}")
+        except Exception:
+            parts.append(f"- {label}: {v}")
 
 async def generate_intelligent_response(
-    user_message: str, feature_context: dict, chat_args: ChatArgsProvider
+    user_message: str, feature_context: dict, chat_args: "ChatArgsProvider"
 ) -> str:
     """
-    Generate an intelligent AI response using OpenAI for the user's question about carbon monitoring data.
+    Generate an intelligent AI response about a carbon credit project using the new feature_context schema.
+    Expects keys like:
+      project_id, user_id, name, project_proponent, project_location, project_geometry,
+      start_date (ISO str or datetime), crediting_period, project_summary, methodology,
+      methodology_details, project_document_url, stakeholder_consultation, grievance_mechanism_url,
+      status, credits_issued, next_action, admin_comments, created_at, updated_at,
+      validation_report_url, verification_report_url, vcu_quantity_issued, last_admin_action_at
     """
     try:
-        # Get OpenAI client and model configuration
         client = get_openai_client()
-        chat_completions_args = await chat_args.get_args(
-            "public_user", "carira_feature_chat"
-        )
+        chat_completions_args = await chat_args.get_args("public_user", "carira_feature_chat")
 
-        # Create context about the carbon monitoring feature
-        area_name = (
-            feature_context.get("name")
-            or f"Project {feature_context.get('project_id')}"
-        )
+        # Title/name fallback
+        area_name = feature_context.get("name") or f"Project {feature_context.get('project_id', 'N/A')}"
 
-        # Build a comprehensive context string for the AI
-        context_parts = []
-        context_parts.append(f"Carbon monitoring project data for {area_name}:")
+        # Build context string from the new schema
+        context_parts: list[str] = [f"Carbon credit project data for {area_name}"]
 
-        if feature_context.get("location"):
-            context_parts.append(f"- Location: {feature_context['location']}")
+        # IDs / ownership
+        _add(feature_context, context_parts, "project_id", "Project ID", str)
+        _add(feature_context, context_parts, "user_id", "Owner/User ID", str)
+        _add(feature_context, context_parts, "project_proponent", "Project Proponent", str)
 
-        if feature_context.get("area_hectares") is not None:
-            context_parts.append(
-                f"- Project Area: {feature_context['area_hectares']:.2f} hectares"
-            )
+        # Location & geometry
+        _add(feature_context, context_parts, "project_location", "Location", str)
+        if feature_context.get("project_geometry") is not None:
+            context_parts.append(f"- Geometry (GeoJSON, trimmed): {_fmt_geo(feature_context.get('project_geometry'))}")
 
-        if feature_context.get("carbon_credits_generated") is not None:
-            context_parts.append(
-                f"- Carbon Credits Generated: {feature_context['carbon_credits_generated']:.2f} credits"
-            )
+        # Core timing
+        _add(feature_context, context_parts, "start_date", "Start Date", _fmt_date)
+        _add(feature_context, context_parts, "crediting_period", "Crediting Period", str)
 
-        if feature_context.get("project_type"):
-            context_parts.append(f"- Project Type: {feature_context['project_type']}")
+        # Methodology
+        _add(feature_context, context_parts, "methodology", "Methodology", str)
+        _add(feature_context, context_parts, "methodology_details", "Methodology Details", str)
 
-        if feature_context.get("status"):
-            context_parts.append(f"- Status: {feature_context['status']}")
+        # Status & credits
+        _add(feature_context, context_parts, "status", "Status", str)
+        _add(feature_context, context_parts, "credits_issued", "Credits Issued (registry)", _fmt_number)
+        _add(feature_context, context_parts, "vcu_quantity_issued", "VCUs Issued", _fmt_number)
+        _add(feature_context, context_parts, "next_action", "Next Action", str)
 
-        if feature_context.get("certification_status"):
-            context_parts.append(
-                f"- Certification Status: {feature_context['certification_status']}"
-            )
+        # Narrative / notes
+        _add(feature_context, context_parts, "project_summary", "Summary", str)
+        _add(feature_context, context_parts, "admin_comments", "Admin Comments", str)
 
-        if feature_context.get("start_date"):
-            context_parts.append(f"- Start Date: {feature_context['start_date']}")
+        # URLs / evidence
+        _add(feature_context, context_parts, "project_document_url", "Project Document URL", str)
+        _add(feature_context, context_parts, "validation_report_url", "Validation Report URL", str)
+        _add(feature_context, context_parts, "verification_report_url", "Verification Report URL", str)
+        _add(feature_context, context_parts, "stakeholder_consultation", "Stakeholder Consultation", str)
+        _add(feature_context, context_parts, "grievance_mechanism_url", "Grievance Mechanism URL", str)
 
-        if feature_context.get("end_date"):
-            context_parts.append(f"- End Date: {feature_context['end_date']}")
-
-        if feature_context.get("description"):
-            context_parts.append(f"- Description: {feature_context['description']}")
-
-        if feature_context.get("created_at"):
-            context_parts.append(f"- Created: {feature_context['created_at']}")
-
-        if feature_context.get("updated_at"):
-            context_parts.append(f"- Last Updated: {feature_context['updated_at']}")
-
-        if feature_context.get("project_area_id"):
-            context_parts.append(f"- Area ID: {feature_context['project_area_id']}")
-
-        if feature_context.get("geometry"):
-            context_parts.append(
-                f"- Geometry present (GeoJSON): {feature_context['geometry']}"
-            )
-
-        if feature_context.get("properties"):
-            context_parts.append(
-                f"- Additional Properties: {feature_context['properties']}"
-            )
+        # Audit trail
+        _add(feature_context, context_parts, "created_at", "Created At", _fmt_date)
+        _add(feature_context, context_parts, "updated_at", "Last Updated", _fmt_date)
+        _add(feature_context, context_parts, "last_admin_action_at", "Last Admin Action", _fmt_date)
 
         context_text = "\n".join(context_parts)
 
-        # Create system prompt for carbon project analysis
-        system_prompt = f"""You are an expert carbon monitoring and environmental project analyst. You help users understand carbon credit projects, environmental monitoring data, and project management information.
+        system_prompt = f"""You are an expert carbon credit and environmental project analyst. Use the provided project context to answer user questions clearly and accurately for both technical and non-technical audiences.
 
-Current carbon project data:
+Project context:
 {context_text}
 
 Guidelines:
-- Provide accurate, helpful information about carbon credit projects and environmental data
-- Explain concepts clearly for both technical and non-technical users
-- Use the specific project data provided when answering questions
-- If asked about comparisons, provide context about typical project values
-- Be concise but informative
-- Focus on actionable insights when possible
-- Discuss project status, certification, and carbon credit generation when relevant
-
-Answer the user's question about this carbon monitoring project."""
-
-        # Call OpenAI API
+- Ground answers in the provided project fields (status, crediting, methodology, documents, dates, location).
+- If the user asks for numbers, cite the values from 'Credits Issued' and/or 'VCUs Issued' as available.
+- Clarify certification/verification stages when relevant and point to the associated report URLs if present.
+- Offer short, actionable insights or next steps tied to the project's current status and 'next_action'.
+- If any key field is missing, state that explicitly rather than guessing.
+- Be concise but informative.
+Answer the user's question about this project."""
         response = await client.chat.completions.create(
             **chat_completions_args,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message},
             ],
-            max_tokens=500,  # Keep responses focused
-            temperature=0.7,  # Balanced creativity and accuracy
+            max_tokens=500,
+            temperature=0.7,
         )
-
         return response.choices[0].message.content.strip()
 
     except Exception as e:
         logger.error(f"Error generating AI response: {str(e)}")
-        # Fallback to rule-based response if AI fails
         return generate_fallback_response(user_message, feature_context)
+
 
 
 def generate_fallback_response(user_message: str, feature_context: dict) -> str:
@@ -302,11 +316,30 @@ class CariraFeatureCreate(BaseModel):
 
 
 class FeatureResponse(BaseModel):
-    id: int
-    project_id: Optional[str] = None
-    geometry: Optional[dict] = None  # GeoJSON geometry object
-    properties: Optional[dict] = None  # Feature properties
-    
+    id: UUID
+    user_id: UUID
+    project_name: Optional[str] = None
+    project_proponent: Optional[str] = None
+    project_location: Optional[str] = None
+    project_geometry: Optional[Any] = None  # JSONB -> dict if structure is known
+    start_date: Optional[date] = None
+    crediting_period: Optional[str] = None
+    project_summary: Optional[str] = None
+    methodology: Optional[str] = None
+    methodology_details: Optional[Any] = None  # JSONB
+    project_document_url: Optional[str] = None
+    stakeholder_consultation: Optional[str] = None
+    grievance_mechanism_url: Optional[str] = None
+    status: Optional[str] = None
+    credits_issued: Optional[int] = None
+    next_action: Optional[str] = None
+    admin_comments: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    validation_report_url: Optional[str] = None
+    verification_report_url: Optional[str] = None
+    vcu_quantity_issued: Optional[int] = None
+    last_admin_action_at: Optional[datetime] = None
 
 
 class CariraFeatureCreateResponse(BaseModel):
@@ -422,36 +455,73 @@ async def get_feature_public(feature_id: str):
     Public endpoint to get a specific Feature by ID for map display.
     Returns full feature data including geometry for map visualization.
     """
+    def _parse_jsonish(value):
+        if value is None:
+            return None
+        if isinstance(value, (dict, list)):
+            return value
+        if isinstance(value, (str, bytes)):
+            try:
+                return json.loads(value)
+            except (json.JSONDecodeError, TypeError):
+                return None
+        return None
+
     try:
         async with get_async_db_connection() as conn:
-            feature_data = await conn.fetchrow(
+            row = await conn.fetchrow(
                 """
-                SELECT id, project_id, geometry, properties
-                FROM project_areas
-                WHERE project_id = $1
+                SELECT
+                    id,
+                    user_id,
+                    project_name,
+                    project_proponent,
+                    project_location,
+                    project_geometry,
+                    start_date,
+                    crediting_period,
+                    project_summary,
+                    methodology,
+                    methodology_details,
+                    project_document_url,
+                    stakeholder_consultation,
+                    grievance_mechanism_url,
+                    status,
+                    credits_issued,
+                    next_action,
+                    admin_comments,
+                    created_at,
+                    updated_at,
+                    validation_report_url,
+                    verification_report_url,
+                    vcu_quantity_issued,
+                    last_admin_action_at
+                FROM carbon_credit_projects
+                WHERE id = $1
                 """,
                 feature_id,
             )
-            if not feature_data:
+
+            if not row:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Feature {feature_id} not found",
                 )
 
-            feature_dict = dict(feature_data)
-            feature_dict["project_id"] = str(feature_dict["project_id"])
-            # Parse geometry JSON if it exists
-            if feature_dict.get("geometry"):
-                try:
-                    feature_dict["geometry"] = json.loads(feature_dict["geometry"])
-                except (json.JSONDecodeError, TypeError):
-                    feature_dict["geometry"] = None
-            # Parse geometry JSON if it exists
-            if feature_dict.get("properties"):
-                try:
-                    feature_dict["properties"] = json.loads(feature_dict["properties"])
-                except (json.JSONDecodeError, TypeError):
-                    feature_dict["properties"] = None
+            feature_dict = dict(row)
+
+            # Defensive parsing for JSONB fields (asyncpg often returns Python objects already)
+            feature_dict["project_geometry"] = _parse_jsonish(feature_dict.get("project_geometry"))
+            feature_dict["methodology_details"] = _parse_jsonish(feature_dict.get("methodology_details"))
+
+            # Ensure UUID fields are UUID objects if your DB driver returns strings
+            for key in ("id", "user_id"):
+                val = feature_dict.get(key)
+                if isinstance(val, str):
+                    try:
+                        feature_dict[key] = UUID(val)
+                    except ValueError:
+                        pass  # let pydantic validate/raise if needed
 
             return FeatureResponse(**feature_dict)
 
@@ -479,9 +549,33 @@ async def create_public_map_for_feature(feature_id: str):
             # Check if feature exists
             feature_data = await conn.fetchrow(
                 """
-                SELECT id, project_id, geometry, properties
-                FROM project_areas 
-                WHERE project_id = $1
+                SELECT
+                    id,
+                    user_id,
+                    project_name,
+                    project_proponent,
+                    project_location,
+                    project_geometry,
+                    start_date,
+                    crediting_period,
+                    project_summary,
+                    methodology,
+                    methodology_details,
+                    project_document_url,
+                    stakeholder_consultation,
+                    grievance_mechanism_url,
+                    status,
+                    credits_issued,
+                    next_action,
+                    admin_comments,
+                    created_at,
+                    updated_at,
+                    validation_report_url,
+                    verification_report_url,
+                    vcu_quantity_issued,
+                    last_admin_action_at
+                FROM carbon_credit_projects
+                WHERE id = $1
                 """,
                 feature_id,
             )
@@ -557,9 +651,6 @@ async def create_public_map_for_feature(feature_id: str):
                 map_title,
                 map_description,
             )
-            print(
-                f"Created public map {map_id} for feature {feature_id} in project {project_id}"
-            )
             # Update project to include this map
             await conn.execute(
                 """
@@ -571,7 +662,6 @@ async def create_public_map_for_feature(feature_id: str):
                 project_id,
             )
 
-            print(f"Public map created successfully for feature {feature_id}: {map_id}")
             return {
                 "success": True,
                 "message": "Public map created successfully for feature",
@@ -613,87 +703,71 @@ async def chat_with_carira_feature(
             )
 
         async with get_async_db_connection() as conn:
-            # Get feature data from projects
-            feature_data_from_projects = await conn.fetchrow(
+            # Get feature data from project
+            feature_data = await conn.fetchrow(
                 """
-                SELECT 
+                SELECT
                     id,
                     user_id,
-                    name,
-                    description,
-                    status,
+                    project_name,
+                    project_proponent,
+                    project_location,
+                    project_geometry,
                     start_date,
-                    end_date,
-                    area_hectares,
-                    carbon_credits_generated,
-                    location,
-                    project_type,
-                    certification_status,
+                    crediting_period,
+                    project_summary,
+                    methodology,
+                    methodology_details,
+                    project_document_url,
+                    stakeholder_consultation,
+                    grievance_mechanism_url,
+                    status,
+                    credits_issued,
+                    next_action,
+                    admin_comments,
                     created_at,
-                    updated_at
-                FROM projects 
+                    updated_at,
+                    validation_report_url,
+                    verification_report_url,
+                    vcu_quantity_issued,
+                    last_admin_action_at
+                FROM carbon_credit_projects
                 WHERE id = $1
                 """,
                 feature_id,
             )
-            print(feature_data_from_projects)
-            if not feature_data_from_projects:
+            if not feature_data:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Feature not found in projects",
                 )
 
-            # Get feature data with geometry
-            feature_data_from_project_areas = await conn.fetchrow(
-                """
-                SELECT 
-                    id,
-                    project_id,
-                    geometry,
-                    properties
-                FROM project_areas 
-                WHERE project_id = $1
-                """,
-                feature_id,
-            )
-
-            if not feature_data_from_project_areas:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Feature not found in project areas",
-                )
-
             # Create context about the feature for the AI
             feature_context = {
-                "project_id": str(feature_data_from_projects["id"]),
-                "user_id": str(feature_data_from_projects["user_id"]),
-                "name": feature_data_from_projects["name"],
-                "description": feature_data_from_projects["description"],
-                "status": feature_data_from_projects["status"],
-                "start_date": feature_data_from_projects["start_date"].isoformat()
-                if feature_data_from_projects["start_date"]
-                else None,
-                "end_date": feature_data_from_projects["end_date"].isoformat()
-                if feature_data_from_projects["end_date"]
-                else None,
-                "area_hectares": feature_data_from_projects["area_hectares"],
-                "carbon_credits_generated": feature_data_from_projects[
-                    "carbon_credits_generated"
-                ],
-                "location": feature_data_from_projects["location"],
-                "project_type": feature_data_from_projects["project_type"],
-                "certification_status": feature_data_from_projects[
-                    "certification_status"
-                ],
-                "created_at": feature_data_from_projects["created_at"].isoformat()
-                if feature_data_from_projects["created_at"]
-                else None,
-                "updated_at": feature_data_from_projects["updated_at"].isoformat()
-                if feature_data_from_projects["updated_at"]
-                else None,
-                "project_area_id": str(feature_data_from_project_areas["id"]),
-                "geometry": feature_data_from_project_areas["geometry"],
-                "properties": feature_data_from_project_areas["properties"]
+                "project_id": str(feature_data["id"]),
+                "user_id": str(feature_data["user_id"]),
+                "name": feature_data.get("project_name"),
+                "project_proponent": feature_data.get("project_proponent"),
+                "project_location": feature_data.get("project_location"),
+                "project_geometry": feature_data.get("project_geometry"),
+                "start_date": feature_data.get("start_date").isoformat(),
+                "crediting_period": feature_data.get("crediting_period"),
+                "project_summary": feature_data.get("project_summary"),
+                "methodology": feature_data.get("methodology"),
+                "methodology_details": feature_data.get("methodology_details"),
+                "project_document_url": feature_data.get("project_document_url"),
+                "stakeholder_consultation": feature_data.get("stakeholder_consultation"),
+                "grievance_mechanism_url": feature_data.get("grievance_mechanism_url"),
+                "status": feature_data.get("status"),
+                "credits_issued": feature_data.get("credits_issued"),
+                "next_action": feature_data.get("next_action"),
+                "admin_comments": feature_data.get("admin_comments"),
+                "created_at": feature_data.get("created_at"),
+                "updated_at": feature_data.get("updated_at"),
+                "validation_report_url": feature_data.get("validation_report_url"),
+                "verification_report_url": feature_data.get("verification_report_url"),
+                "vcu_quantity_issued": feature_data.get("vcu_quantity_issued"),
+                "last_admin_action_at": feature_data.get("last_admin_action_at"),
             }
 
             # Create an intelligent AI-powered response based on the user's question
