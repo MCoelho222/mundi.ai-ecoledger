@@ -24,6 +24,9 @@ import asyncio
 import secrets
 from functools import lru_cache
 from openai import AsyncOpenAI
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 def generate_id(length=12, prefix=""):

@@ -1,5 +1,9 @@
 # 🌱 EcoLedger Carbon Monitoring Iframe Integration
 
+# Run
+
+`py -m uvicorn src.wsgi:app --host localhost --port 8000 --log-level debug --access-log --use-colors --reload `
+
 ## Overview
 
 This document details the implementation of a public iframe embedding system for Carira carbon monitoring features. The system allows external websites to embed interactive carbon monitoring maps with AI-powered chat functionality without requiring user authentication.
@@ -80,13 +84,29 @@ async def chat_with_carira_feature(feature_id: int, request: dict)
 #### **CORS Configuration** (`src/wsgi.py`)
 
 ```python
+# Environment variable-based CORS configuration
+cors_origins = [
+    os.getenv("FRONT_MUNDI_BASE_URL", "http://localhost:5173"),
+    os.getenv("UNKNOWN_BASE_URL", "http://localhost:3000"),
+    os.getenv("ECOLEDGER_FRONT_BASE_URL", "http://localhost:8081"),
+    "null"  # Allow null origin for local file access
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000", "null"],
+    allow_origins=cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
+```
+
+**Environment Variables for CORS** (`.env`):
+
+```bash
+# CORS Configuration - individual frontend base URLs
+FRONT_MUNDI_BASE_URL=http://localhost:5173
+UNKNOWN_BASE_URL=http://localhost:3000
+ECOLEDGER_FRONT_BASE_URL=http://localhost:8081
 ```
 
 ### 2. Frontend Components
@@ -103,17 +123,45 @@ function initializeSuperTokens() {
 <Route path="/feature/:projectId" element={<FeatureMap />} />;
 ```
 
-#### **Feature Map Component** (`frontendts/src/componentsFeatureMap.tsx`)
+#### **Feature Map Component** (`frontendts/src/components/FeatureMap.tsx`)
 
 ```tsx
-// Public API integration
-const apiUrl =
-  window.location.hostname === "localhost"
-    ? `http://localhost:8000/public/feature/${id}`
-    : `/public/feature/${id}`;
+import { buildApiUrl } from "../lib/config";
+
+// Environment-aware API integration
+const apiUrl = buildApiUrl(`/public/feature/${id}`);
 
 // Embed mode optimization
 const isEmbedMode = searchParams.get("embed") === "true";
+```
+
+#### **Configuration Utility** (`frontendts/src/lib/config.ts`)
+
+Centralized configuration management:
+
+```tsx
+// Get API base URL from environment variables
+export const getApiBaseUrl = (): string => {
+  return import.meta.env.VITE_WEBSITE_DOMAIN || window.location.origin;
+};
+
+// Build API URLs with proper base URL handling
+export const buildApiUrl = (
+  endpoint: string,
+  useLocalhost?: boolean
+): string => {
+  const baseUrl = useLocalhost ? "http://localhost:8000" : getApiBaseUrl();
+  return `${baseUrl}${endpoint}`;
+};
+```
+
+**Frontend Environment Variables** (`frontendts/.env`):
+
+```bash
+VITE_WEBSITE_DOMAIN=http://localhost:8000
+VITE_EMAIL_VERIFICATION=disable
+VITE_AUTH_MODE=enabled
+VITE_POSTHOG_API_KEY=
 ```
 
 #### **Enhanced Map Component** (`frontendts/src/components/MapLibreMap.tsx`)
@@ -123,7 +171,10 @@ Key improvements:
 - **Safe Authentication Wrappers**: Graceful degradation when auth unavailable
 - **Optimized Zoom Levels**: `maxZoom: 18` with higher initial zoom
 - **Green Geometry Highlighting**: Clear carbon feature visualization
-- **Redesigned Chat UI**: Right-side panel with bottom input
+- **Container-Responsive Design**: Chat components sized relative to iframe container
+  - Chat panel: 30% width with 200px-300px constraints
+  - Chat input: 70% width with 250px-500px constraints
+- **Environment-Aware API Calls**: Uses `buildApiUrl` utility for consistent endpoint construction
 - **Hidden Version Search**: Removed confusing changelog interface
 
 ### 3. AI Intelligence System
@@ -192,7 +243,7 @@ sequenceDiagram
 
 ## ⚙️ Environment Configuration
 
-Required environment variables in `.env`:
+### Backend Configuration (`.env`)
 
 ```bash
 # Database Configuration
@@ -207,7 +258,43 @@ OPENAI_BASE_URL=https://api.openai.com/v1
 
 # Authentication Mode
 MUNDI_AUTH_MODE=edit
+
+# CORS Configuration - individual frontend base URLs
+FRONT_MUNDI_BASE_URL=http://localhost:5173
+UNKNOWN_BASE_URL=http://localhost:3000
+ECOLEDGER_FRONT_BASE_URL=http://localhost:8081
+
+# DriftDB Configuration
+DRIFTDB_SERVER_URL=http://localhost:8080
+
+# QGIS Processing Configuration
+QGIS_PROCESSING_HOST=localhost
+QGIS_PROCESSING_PORT=8817
 ```
+
+### Frontend Configuration (`frontendts/.env`)
+
+```bash
+# API Base URL - points to backend server
+VITE_WEBSITE_DOMAIN=http://localhost:8000
+
+# Authentication Configuration
+VITE_EMAIL_VERIFICATION=disable
+VITE_AUTH_MODE=enabled
+
+# Analytics (optional)
+VITE_POSTHOG_API_KEY=
+
+# Development settings can be added as needed
+```
+
+### Environment Variable Benefits
+
+- **Environment-Specific Configuration**: Different URLs for dev/staging/production
+- **Centralized Management**: All configuration in environment files
+- **Type Safety**: Frontend variables have TypeScript declarations
+- **Flexible CORS**: Individual control over each frontend origin
+- **Easy Deployment**: Configuration without code changes
 
 ## 🚀 Usage Example
 
@@ -222,34 +309,54 @@ MUNDI_AUTH_MODE=edit
   <body>
     <div id="features-list"></div>
     <div id="map-view" style="display: none;">
-      <iframe id="map-iframe" width="100%" height="600px"></iframe>
+      <iframe
+        id="map-iframe"
+        width="100%"
+        height="600px"
+        style="border: none; border-radius: 8px;"
+      ></iframe>
     </div>
 
     <script>
+      // Environment-aware configuration
       const API_BASE = "http://localhost:8000/public";
       const FRONTEND_BASE = "http://localhost:5173";
 
-      // Load features
+      // Load features with error handling
       async function loadFeatures() {
-        const response = await fetch(`${API_BASE}/features`);
-        const data = await response.json();
-        // Display features...
-      }
-
-      // Create and display map
-      async function viewFeatureOnMap(featureId) {
-        const response = await fetch(
-          `${API_BASE}/create-map-for-feature/${featureId}`,
-          { method: "POST" }
-        );
-        const mapData = await response.json();
-
-        if (mapData.success) {
-          document.getElementById(
-            "map-iframe"
-          ).src = `${FRONTEND_BASE}${mapData.embed_url}`;
+        try {
+          const response = await fetch(`${API_BASE}/features`);
+          if (!response.ok) throw new Error("Failed to load features");
+          const data = await response.json();
+          displayFeatures(data.features);
+        } catch (error) {
+          console.error("Error loading features:", error);
         }
       }
+
+      // Create and display responsive map
+      async function viewFeatureOnMap(featureId) {
+        try {
+          const response = await fetch(
+            `${API_BASE}/create-map-for-feature/${featureId}`,
+            { method: "POST" }
+          );
+          const mapData = await response.json();
+
+          if (mapData.success) {
+            const iframe = document.getElementById("map-iframe");
+            iframe.src = `${FRONTEND_BASE}${mapData.embed_url}`;
+
+            // Show map view with smooth transition
+            document.getElementById("map-view").style.display = "block";
+          }
+        } catch (error) {
+          console.error("Error creating map:", error);
+        }
+      }
+
+      // Initialize dashboard
+      loadFeatures();
     </script>
   </body>
 </html>
@@ -305,6 +412,10 @@ MUNDI_AUTH_MODE=edit
    # Start PostgreSQL with PostGIS
    docker-compose up postgres
 
+   # Configure environment variables
+   cp .env.example .env
+   # Edit .env with your database and OpenAI credentials
+
    # Start FastAPI server
    python -m uvicorn src.wsgi:app --reload --port 8000
    ```
@@ -313,23 +424,66 @@ MUNDI_AUTH_MODE=edit
 
    ```bash
    cd frontendts
+
+   # Install dependencies
    npm install
+
+   # Configure frontend environment
+   cp .env.example .env
+   # Edit .env with your frontend configuration
+
+   # Start development server
    npm run dev  # Starts on localhost:5173
    ```
 
 3. **Environment Setup**
+
+   **Backend (`.env`):**
+
    ```bash
+   # Copy example and configure
    cp .env.example .env
-   # Configure database and OpenAI credentials
+
+   # Required variables:
+   POSTGRES_URL=postgresql://user:password@localhost:5432/database
+   OPENAI_API_KEY=sk-proj-your-key-here
+   FRONT_MUNDI_BASE_URL=http://localhost:5173
+   UNKNOWN_BASE_URL=http://localhost:3000
+   ECOLEDGER_FRONT_BASE_URL=http://localhost:8081
+   ```
+
+   **Frontend (`frontendts/.env`):**
+
+   ```bash
+   # API configuration
+   VITE_WEBSITE_DOMAIN=http://localhost:8000
+   VITE_AUTH_MODE=enabled
+   ```
+
+4. **Verify Setup**
+
+   ```bash
+   # Test backend API
+   curl http://localhost:8000/public/features
+
+   # Test frontend
+   open http://localhost:5173
+
+   # Test iframe embedding
+   open external-frontend-demo.html
    ```
 
 ## 📊 Key Metrics & Benefits
 
 - **Zero Authentication Friction**: Public access for embedded contexts
+- **Container-Responsive Design**: Chat components adapt to iframe dimensions
+- **Environment-Aware Configuration**: Seamless deployment across environments
 - **Optimized UX**: Higher zoom levels show geometry immediately
 - **Intelligent Responses**: Context-aware AI analysis of carbon data
-- **Responsive Design**: Works seamlessly in iframe environments
+- **Type-Safe Configuration**: TypeScript declarations for environment variables
+- **Centralized API Management**: Single configuration utility for all endpoints
 - **Progressive Enhancement**: Core features work without dependencies
+- **Flexible CORS Policy**: Individual control per frontend origin
 
 ## 🔒 Security Considerations
 
@@ -346,6 +500,11 @@ MUNDI_AUTH_MODE=edit
 - **Advanced Filtering**: Support for geographic and temporal filters
 - **Batch Operations**: Bulk feature processing capabilities
 - **Real-time Updates**: WebSocket integration for live data
+- **Multi-Environment Deployment**: Automated configuration for different stages
+- **Enhanced Responsive Design**: Adaptive layouts for various iframe sizes
+- **Configuration Validation**: Runtime validation of environment variables
+- **API Rate Limiting**: Protection against abuse in production
+- **Error Boundary Components**: Better error handling in iframe contexts
 
 ---
 
